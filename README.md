@@ -11,7 +11,10 @@ Ohara réunit au même endroit la recherche, la lecture, le téléchargement et 
 
 ### Un navigateur avant tout
 - Ohara s'ouvre sur le navigateur, en version téléphone ; « Version ordinateur » au choix, onglet par onglet.
-- Onglets, page d'accueil (recherche, reprise de lecture, sites, raccourcis), barre d'outils en bas, recherche dans la page, propositions dans la barre d'adresse.
+- Onglets avec aperçus, groupes d'onglets par fic ou par site, onglets privés aux barres sombres qui ne laissent aucune trace.
+- Page d'accueil (recherche, reprise de lecture, favoris, sites, raccourcis), barre d'outils en bas, recherche dans la page, propositions dans la barre d'adresse.
+- Favoris rangés en dossiers ; appui long sur un lien pour l'ouvrir en arrière-plan ou en privé, ajouter ou télécharger la fic, copier, partager.
+- Lecture : barres cachées en descendant, chapitre suivant en continuant à faire défiler tout en bas (une seconde), précédent tout en haut, mode lecture (thème, police, taille, interligne, marges).
 - Bloqueur de publicités et de pisteurs (EasyList, EasyPrivacy, liste de Peter Lowe, Fanboy), anti-pistage proche de Brave.
 - Traduction en français en un bouton, sur le téléphone (rien n'est envoyé), pour toutes les pages tant qu'elle est activée.
 - Appui long sur une phrase › « Masquer » : elle disparaît tout de suite et dans les chapitres suivants. Promos et notes d'auteur masquées d'office.
@@ -19,11 +22,12 @@ Ohara réunit au même endroit la recherche, la lecture, le téléchargement et 
 - Historique activable, navigation libre cachée dans les réglages.
 
 ### La bibliothèque à côté
-- Remplie toute seule : une fic y entre après 10 000 mots lus (réglable), et se rouvre à la dernière page lue.
+- Remplie toute seule : une fic y entre après 10 000 mots lus (réglable), et se rouvre à la dernière page lue, avec « Précédemment » (phrases clés des derniers chapitres lus) après une semaine sans l'ouvrir.
+- Collections automatiques : mises à jour ce mois-ci, actives et prometteuses, presque à jour, à rattraper, longues, courtes, en pause, par fandom et par type.
 - Étagères (À lire, En cours, Favoris, Pour Claude, Déjà lues, Abandonnées et les vôtres), note sur 10, commentaire, raison d'abandon, fiches personnages.
 - Badges : nouveaux chapitres, fic terminée, inactive, supprimée du site ; doublons FanFiction.net / SpaceBattles fusionnés.
 - Chapitres lus gardés sur le téléphone ; téléchargement complet au choix ; « Téléchargements » affiche les chapitres comme des pages, sans connexion.
-- Exports EPUB, TXT et Pack Claude.
+- « Envoyer à Claude » en un geste (fichiers et consigne choisie vers l'appli Claude) ; exports EPUB, TXT et Pack Claude.
 
 ### Découverte
 - Recherche avancée multi-sites, score « Prometteuse » aux critères réglables, « Pour vous », « Nouveautés », « Trouver une fic similaire ».

@@ -186,6 +186,8 @@ class Tab(val id: Long, initialUrl: String, val private: Boolean = false) {
     var icon by mutableStateOf<androidx.compose.ui.graphics.ImageBitmap?>(null)
     /** Page affichée en mode lecture. */
     var readerMode by mutableStateOf(false)
+    /** Page mise en mode lecture à la main (même si ce n'est pas un chapitre reconnu). */
+    var readerUrl: String? = null
     val isStart: Boolean get() = url.isBlank()
 }
 
@@ -462,7 +464,9 @@ hide:function(s){try{document.querySelectorAll(s).forEach(function(x){x.style.se
             val (prev, next) = if (info != null) PageTools.neighbours(u, info) else null to null
             w.evaluateJavascript(PageTools.pullScript(prev, next), null)
         }
-        if (!t.offline && (t.readerMode || (PageTools.autoReader && chapter))) {
+        // Le mode lecture suit la lecture de chapitre en chapitre, mais ne s'applique pas aux autres pages (sommaire, recherche…).
+        if (t.readerMode && !chapter && t.readerUrl != u) t.readerMode = false
+        if (!t.offline && ((t.readerMode && (chapter || t.readerUrl == u)) || (PageTools.autoReader && chapter))) {
             t.readerMode = true
             w.evaluateJavascript(PageTools.readerScript(PageTools.readerConfig(info)), null)
         }
@@ -473,6 +477,7 @@ hide:function(s){try{document.querySelectorAll(s).forEach(function(x){x.style.se
         val w = t.web ?: return
         if (t.readerMode) { t.readerMode = false; w.reload(); return }
         t.readerMode = true
+        t.readerUrl = t.url
         val info = ficInfo(t.url)
         if (PageTools.pullNav) { val (p, n) = if (info != null) PageTools.neighbours(t.url, info) else null to null; w.evaluateJavascript(PageTools.pullScript(p, n), null) }
         w.evaluateJavascript(PageTools.readerScript(PageTools.readerConfig(info)), null)
