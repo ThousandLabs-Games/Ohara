@@ -19,6 +19,7 @@ Ohara réunit au même endroit la recherche, la lecture, le téléchargement et 
 - Traduction en français en un bouton, sur le téléphone (rien n'est envoyé), pour toutes les pages tant qu'elle est activée.
 - Appui long sur une phrase › « Masquer » : elle disparaît tout de suite et dans les chapitres suivants. Promos et notes d'auteur masquées d'office.
 - « Masquer un élément » d'un site (bannières, encarts), comme sur Brave.
+- Réglages par site : chaque fonction (glissement entre chapitres, barres cachées, mode lecture, masquage, menu des liens, traduction) peut être coupée sur un site seulement.
 - Historique activable, navigation libre cachée dans les réglages.
 
 ### La bibliothèque à côté
