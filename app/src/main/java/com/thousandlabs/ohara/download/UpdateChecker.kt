@@ -53,11 +53,16 @@ object UpdateChecker {
         val finished = mutableListOf<String>()
         val updatedTitles = mutableListOf<String>()
         var errors = 0
+        // un site qui demande une vérification n'est plus interrogé pendant cette vérification (inutile, et risque de blocage)
+        val blockedSites = HashSet<com.thousandlabs.ohara.data.Site>()
         list.forEachIndexed { i, old ->
             _progress.value = Progress(true, i, list.size, old.title)
+            if (old.site in blockedSites) { errors++; return@forEachIndexed }
+            if (i > 0) kotlinx.coroutines.delay(if (Prefs.gentleSpeed) 2500 else 900)
             try {
                 val info = Sources.of(old.site).fetchInfo(old.storyId)
-                val diff = info.totalChapters - old.totalChapters
+                // fiche jamais complétée (fic entrée par la lecture) : le premier compte n'est pas une nouveauté
+                val diff = if (old.chapters.isEmpty()) 0 else info.totalChapters - old.totalChapters
                 val becameComplete = info.status == FicStatus.COMPLETE && old.status != FicStatus.COMPLETE
                 val hadAll = old.totalChapters > 0 && Library.downloadedCount(old.id) >= old.totalChapters
                 Library.upsert(info)
@@ -79,6 +84,7 @@ object UpdateChecker {
                 else errors++
             } catch (e: VerificationNeeded) {
                 errors++
+                blockedSites += old.site
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
             } catch (e: Exception) {

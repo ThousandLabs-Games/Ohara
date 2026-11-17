@@ -36,7 +36,7 @@ object Bookmarks {
     private fun save() {
         val a = JSONArray()
         _items.value.forEach { a.put(JSONObject().put("t", it.title).put("u", it.url).put("f", it.folder).put("a", it.at)) }
-        runCatching { file.writeText(JSONObject().put("b", a).put("f", JSONArray(_folders.value)).toString()) }
+        SafeFile.write(file, JSONObject().put("b", a).put("f", JSONArray(_folders.value)).toString())
     }
 
     fun contains(url: String) = _items.value.any { it.url == url }

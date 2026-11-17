@@ -105,6 +105,7 @@ function css(c){return 'html,body{background:'+c.bg+'!important;color:'+c.fg+'!i
 '#storytext blockquote{margin:1em 1.2em;padding-left:.8em;border-left:3px solid '+c.dim+'}#storytext hr{border:none;border-top:1px solid '+c.dim+';margin:1.6em 25%}'+
 'nav.ohr-n{display:flex;justify-content:space-between;margin:2.2em 0;font:15px sans-serif}nav.ohr-n a{color:'+c.fg+';opacity:.85;text-decoration:none;padding:10px 6px;border:1px solid '+c.dim+';border-radius:18px;min-width:110px;text-align:center}';}
 if(window.__ohReader){var st=document.getElementById('ohr-css');if(st)st.textContent=css(c);return;}
+if(window.__ohTr)window.__ohTr.restore();
 var best=null,len=0;if(c.sel)document.querySelectorAll(c.sel).forEach(function(e){var l=(e.innerText||'').length;if(l>len){len=l;best=e;}});
 if(!best||len<300){var cands=document.querySelectorAll('article,main,[class*=content],[id*=content],[class*=chapter],[id*=chapter],.entry,.post');
 cands.forEach(function(e){var l=(e.innerText||'').length;if(l>len){len=l;best=e;}});}

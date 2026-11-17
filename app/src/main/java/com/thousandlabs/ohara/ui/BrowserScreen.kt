@@ -507,6 +507,7 @@ hide:function(s){try{document.querySelectorAll(s).forEach(function(x){x.style.se
         val info = ficInfo(t.url)
         if (SiteRules.on(SiteRules.Feature.PULL, t.url)) { val (p, n) = if (info != null) PageTools.neighbours(t.url, info) else null to null; w.evaluateJavascript(PageTools.pullScript(p, n), null) }
         w.evaluateJavascript(PageTools.readerScript(PageTools.readerConfig(info)), null)
+        if (SiteRules.on(SiteRules.Feature.TRANSLATE, t.url)) PageTranslator.inject(w)
     }
 
     fun applyReaderStyle(t: Tab) {

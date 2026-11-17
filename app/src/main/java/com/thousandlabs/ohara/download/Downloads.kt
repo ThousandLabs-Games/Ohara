@@ -17,6 +17,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -54,7 +55,7 @@ object Downloads {
     fun init(context: Context) { app = context.applicationContext }
 
     private fun edit(id: String, f: (DownloadJob) -> DownloadJob) {
-        _jobs.value = _jobs.value.map { if (it.ficId == id) f(it) else it }
+        _jobs.update { l -> l.map { if (it.ficId == id) f(it) else it } }
         DownloadService.refresh(app)
     }
 
@@ -68,13 +69,13 @@ object Downloads {
                     only = if (only == null || it.only == null) null else (it.only + only).distinct())
             }
         } else {
-            _jobs.value = cur + DownloadJob(fic.id, fic.title, only = only)
+            _jobs.update { l -> if (l.any { it.ficId == fic.id }) l else l + DownloadJob(fic.id, fic.title, only = only) }
         }
         start()
     }
 
     fun cancel(id: String) {
-        _jobs.value = _jobs.value.filterNot { it.ficId == id }
+        _jobs.update { l -> l.filterNot { it.ficId == id } }
         if (_jobs.value.none { it.state == DownloadJob.State.RUNNING }) restartWorker()
         DownloadService.refresh(app)
     }
@@ -88,14 +89,14 @@ object Downloads {
 
     /** Après une vérification réussie dans le navigateur : on relance tout ce qui attendait. */
     fun resumeVerified() {
-        _jobs.value = _jobs.value.map {
+        _jobs.update { l -> l.map {
             if (it.state == DownloadJob.State.VERIFY) it.copy(state = DownloadJob.State.WAITING, message = "", verifyUrl = null) else it
-        }
+        } }
         start()
     }
 
     fun clearFinishedErrors() {
-        _jobs.value = _jobs.value.filterNot { it.state == DownloadJob.State.ERROR }
+        _jobs.update { l -> l.filterNot { it.state == DownloadJob.State.ERROR } }
         DownloadService.refresh(app)
     }
 
@@ -150,7 +151,7 @@ object Downloads {
                 val total = fic.chapters.indices.sumOf { idx -> Library.readChapter(id, idx)?.let { Library.countWords(it) } ?: 0 }
                 if (total > 0) Library.update(id) { it.copy(words = total.toLong()) }
             }
-            _jobs.value = _jobs.value.filterNot { it.ficId == id }
+            _jobs.update { l -> l.filterNot { it.ficId == id } }
             if (done > 0) Notify.doneDownload(app, "${fic.title} : $done chapitre${if (done > 1) "s" else ""}")
         } catch (e: VerificationNeeded) {
             edit(id) { it.copy(state = DownloadJob.State.VERIFY, verifyUrl = e.url, message = "Vérification demandée par le site") }

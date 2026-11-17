@@ -54,6 +54,8 @@ object Backup {
         return m
     }
 
+    private val EXTRA_FILES = listOf("favoris.json", "historique.json", "lectures_en_cours.json")
+
     private fun ZipOutputStream.text(name: String, s: String) {
         putNextEntry(ZipEntry(name)); write(s.toByteArray(Charsets.UTF_8)); closeEntry()
     }
@@ -68,6 +70,8 @@ object Backup {
             z.text("fics.json", JSONArray().also { a -> fics.forEach { a.put(it.toJson()) } }.toString())
             z.text("journal.json", ReadingLog.toJson().toString())
             z.text("reglages.json", prefsToJson().toString())
+            // favoris, historique et fics en cours de découverte (pas encore dans la bibliothèque)
+            EXTRA_FILES.forEach { n -> File(Library.dataDir(), n).takeIf { it.exists() }?.let { z.text("extra/$n", it.readText()) } }
             if (withChapters) fics.forEachIndexed { i, f ->
                 onProgress("Chapitres : ${i + 1}/${fics.size} — ${f.title}")
                 val dir = Library.ficDir(f.id)
@@ -92,6 +96,7 @@ object Backup {
         var fics: List<Fic>? = null
         var journal: JSONObject? = null
         var prefs: JSONObject? = null
+        val extras = HashMap<String, String>()
         val tmp = File(Library.dataDir(), "restauration").apply { deleteRecursively(); mkdirs() }
         var chapters = 0
         ZipInputStream(input.buffered()).use { z ->
@@ -107,6 +112,7 @@ object Backup {
                     }
                     name == "journal.json" -> journal = JSONObject(z.readBytes().toString(Charsets.UTF_8))
                     name == "reglages.json" -> prefs = JSONObject(z.readBytes().toString(Charsets.UTF_8))
+                    name.startsWith("extra/") && name.removePrefix("extra/") in EXTRA_FILES -> extras[name.removePrefix("extra/")] = z.readBytes().toString(Charsets.UTF_8)
                     name.startsWith("chapitres/") && !e.isDirectory -> {
                         val f = File(tmp, name.removePrefix("chapitres/"))
                         f.parentFile?.mkdirs()
@@ -158,6 +164,24 @@ object Backup {
             }
         }
         tmp.deleteRecursively()
+        // favoris, historique : remplacés, ou ajoutés à ceux du téléphone en fusion
+        extras["favoris.json"]?.let { txt ->
+            if (replace) com.thousandlabs.ohara.data.SafeFile.write(File(Library.dataDir(), "favoris.json"), txt)
+            else runCatching {
+                val a = JSONObject(txt).getJSONArray("b")
+                for (i in 0 until a.length()) a.getJSONObject(i).let { b ->
+                    if (!com.thousandlabs.ohara.data.Bookmarks.contains(b.optString("u")))
+                        com.thousandlabs.ohara.data.Bookmarks.add(b.optString("t"), b.optString("u"), b.optString("f", com.thousandlabs.ohara.data.Bookmarks.DEFAULT))
+                }
+            }
+        }
+        if (replace) {
+            extras["historique.json"]?.let { com.thousandlabs.ohara.data.SafeFile.write(File(Library.dataDir(), "historique.json"), it) }
+            extras["lectures_en_cours.json"]?.let { com.thousandlabs.ohara.data.SafeFile.write(File(Library.dataDir(), "lectures_en_cours.json"), it) }
+        }
+        com.thousandlabs.ohara.data.Bookmarks.init(Library.dataDir())
+        com.thousandlabs.ohara.data.History.init(Library.dataDir())
+        com.thousandlabs.ohara.ui.ReadTracker.init(Library.dataDir())
         Library.replaceAll(Library.fics.value) // relit les chapitres présents
         Library.saveNow()
         return Summary(list.size, chapters, manifest?.optLong("date") ?: 0L)

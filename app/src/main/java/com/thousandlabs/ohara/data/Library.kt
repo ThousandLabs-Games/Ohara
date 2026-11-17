@@ -42,7 +42,8 @@ object Library {
             val a = JSONArray(f.readText())
             List(a.length()) { Fic.fromJson(a.getJSONObject(it)) }
         }.getOrElse {
-            // fichier abîmé : on tente la copie de secours
+            // fichier abîmé : on le met de côté (jamais écrasé), puis on tente la copie de secours
+            if (f.exists() && f.length() > 0) runCatching { f.copyTo(File(root, "fics.abime-${System.currentTimeMillis()}.json"), overwrite = false) }
             runCatching {
                 val a = JSONArray(File(root, "fics.bak.json").readText())
                 List(a.length()) { Fic.fromJson(a.getJSONObject(it)) }
@@ -187,9 +188,7 @@ object Library {
         runCatching { chapterFile(id, index).takeIf { it.exists() }?.readText() }.getOrNull()
 
     fun writeChapter(id: String, index: Int, html: String) {
-        val f = chapterFile(id, index)
-        f.parentFile?.mkdirs()
-        f.writeText(html)
+        SafeFile.write(chapterFile(id, index), html)
         (downloadedSet(id) as MutableSet<Int>).add(index)
         _downloadVersion.value++
     }
@@ -252,5 +251,5 @@ object ReadingLog {
     @Synchronized
     fun toJson(): JSONObject = JSONObject().also { o -> days.forEach { (k, v) -> o.put(k, JSONArray().put(v[0]).put(v[1])) } }
 
-    private fun save() { runCatching { file.writeText(toJson().toString()) } }
+    private fun save() { SafeFile.write(file, toJson().toString()) }
 }

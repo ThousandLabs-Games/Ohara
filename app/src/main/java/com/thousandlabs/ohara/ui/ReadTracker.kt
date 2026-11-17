@@ -66,7 +66,7 @@ object ReadTracker {
                 .put("f", w.fandom).put("w", w.words).put("c", org.json.JSONArray(w.chapters.toList())).put("u", w.lastUrl)
                 .put("i", w.lastIndex).put("d", w.updated).put("n", w.chapterCount))
         }
-        runCatching { file.writeText(o.toString()) }
+        com.thousandlabs.ohara.data.SafeFile.write(file, o.toString())
     }
 
     /** Mots déjà lus d'une fic pas encore dans la bibliothèque (pour l'afficher dans le navigateur). */
@@ -98,7 +98,13 @@ function tick(){var m=main();if(!m)return;var r=m.getBoundingClientRect();var to
 var f=Math.max(0,Math.min(1,(window.scrollY+window.innerHeight-top)/Math.max(1,m.offsetHeight)));
 var words=(m.innerText||'').split(/\s+/).length;
 OharaRead.report(words,f,meta?'':info());meta=true;
-if(!sent&&f>=0.6){sent=true;OharaRead.chapter(m.innerHTML.length<1500000?m.innerHTML:'');}}
+if(!sent&&f>=0.6){sent=true;var h=orig(m);OharaRead.chapter(h.length<1500000?h:'');}}
+/* Le chapitre gardé est le texte d'origine : sans la traduction affichée, ni les repères ajoutés par Ohara. */
+function orig(m){var c=m.cloneNode(true);var a=document.createTreeWalker(m,NodeFilter.SHOW_TEXT),b=document.createTreeWalker(c,NodeFilter.SHOW_TEXT),x,y;
+while((x=a.nextNode())&&(y=b.nextNode())){if(x.__orig!=null)y.nodeValue=x.__orig;}
+c.querySelectorAll('.oh-mk,script,style,noscript,iframe').forEach(function(e){e.remove();});
+c.querySelectorAll('[data-oh-m],[data-oh-br],[data-oh-shown]').forEach(function(e){e.removeAttribute('data-oh-m');e.removeAttribute('data-oh-br');e.removeAttribute('data-oh-shown');e.style.display='';});
+return c.innerHTML;}
 var t=null;window.addEventListener('scroll',function(){if(t)return;t=setTimeout(function(){t=null;tick();},1500);},{passive:true});
 setTimeout(tick,1200);setInterval(tick,8000);
 })();"""
@@ -132,6 +138,20 @@ setTimeout(tick,1200);setInterval(tick,8000);
         info.chapterIndex ?: info.chapterKey?.let { k -> fic?.chapters?.indexOfFirst { it.key == k }?.takeIf { it >= 0 } }
 
     private val lastSaveAt = HashMap<String, Long>()
+    private val counted = HashSet<String>()
+
+    /** Temps de lecture : compté seulement quand vous avancez dans la page (pas quand le téléphone reste posé). */
+    private data class Pace(var at: Long, var fraction: Float)
+    private val pace = HashMap<String, Pace>()
+
+    private fun readingSeconds(url: String, fraction: Float): Long {
+        val now = System.currentTimeMillis()
+        val p = pace[url]
+        pace[url] = Pace(now, fraction)
+        if (pace.size > 50) pace.keys.take(25).forEach { pace.remove(it) }
+        if (p == null || kotlin.math.abs(fraction - p.fraction) < 0.002f) return 0
+        return ((now - p.at) / 1000).coerceIn(0, 60)
+    }
 
     /** Rapport régulier d'une page de chapitre : mots du chapitre, part parcourue, informations de la page. */
     fun onReport(url: String, words: Int, fraction: Float, metaJson: String) {
@@ -140,8 +160,19 @@ setTimeout(tick,1200);setInterval(tick,8000);
         val key = info.chapterKey ?: info.chapterIndex?.toString() ?: url.substringBefore('#')
         val meta = runCatching { if (metaJson.isNotBlank()) JSONObject(metaJson) else null }.getOrNull()
         val lib = Library.get(id)
+        val secs = readingSeconds(url.substringBefore('#'), fraction)
+        if (secs > 0) {
+            ReadingLog.add(0, secs)
+            if (lib != null) Library.update(id) { it.copy(secondsRead = it.secondsRead + secs) }
+        }
         if (lib != null) {
             val now = System.currentTimeMillis()
+            // mots lus : un chapitre nouveau (pas une relecture) compte une fois
+            val idx0 = chapterIndex(info, lib)
+            if (fraction >= 0.6f && counted.add("$id|$key") && (idx0 == null || idx0 > lib.maxChapterRead)) {
+                ReadingLog.add(words.toLong(), 0)
+                Library.update(id) { it.copy(wordsRead = it.wordsRead + words) }
+            }
             if (now - (lastSaveAt[id] ?: 0L) < 3000 && fraction < 0.6f) return
             lastSaveAt[id] = now
             val idx = chapterIndex(info, lib)

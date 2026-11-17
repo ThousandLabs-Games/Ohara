@@ -87,7 +87,12 @@ object Nav {
         }
         if (chapter == null) Recap.maybeShow(f)
         com.thousandlabs.ohara.data.Library.update(ficId) { it.copy(lastOpened = System.currentTimeMillis(), newChapters = 0, completedAlert = false) }
-        openBrowser(url.ifBlank { f.url })
+        val target = url.ifBlank { f.url }
+        // Un onglet est déjà ouvert sur cette fic : on le reprend au lieu d'en ouvrir un de plus.
+        val h = BrowserHolder
+        h.restore()
+        val i = h.tabs.indexOfFirst { !it.private && h.ficInfo(it.url)?.ficId == ficId }
+        if (i >= 0) { home(TAB_BROWSER); h.select(i); h.openUrl(target, newTab = false) } else openBrowser(target)
     }
 }
 

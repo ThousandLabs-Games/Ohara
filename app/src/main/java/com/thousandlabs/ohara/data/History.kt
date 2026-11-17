@@ -65,7 +65,7 @@ object History {
                     _entries.value.forEach { e -> a.put(JSONObject().put("k", e.kind.name).put("t", e.title).put("u", e.target).put("a", e.at)) }
                 }.toString()
             }
-            runCatching { file.writeText(json) }
+            SafeFile.write(file, json)
         }.start()
     }
 }
