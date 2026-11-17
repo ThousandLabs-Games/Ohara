@@ -84,13 +84,15 @@ object FanFictionNet : Source {
             }
         } else listOf(ChapterInfo(title.ifBlank { "Chapitre unique" }, "$BASE/s/$storyId/1/"))
         val cover = top.selectFirst("img.cimage")?.absUrl("src").orEmpty()
+        val fandomUrl = links.lastOrNull()?.absUrl("href").orEmpty()
         return Fic(
             id = Fic.makeId(site, storyId), site = site, storyId = storyId, url = storyUrl(storyId),
             title = title, author = authorEl?.text().orEmpty(), authorUrl = authorEl?.absUrl("href").orEmpty(),
             fandoms = fandoms, summary = summary, rating = meta.rating, language = meta.language,
             genres = meta.genres, characters = meta.characters, status = meta.status, words = meta.words,
             chapterCount = chapters.size, chapters = chapters, published = meta.published, updated = meta.updated,
-            favs = meta.favs, follows = meta.follows, reviews = meta.reviews, cover = cover, crossover = crossover
+            favs = meta.favs, follows = meta.follows, reviews = meta.reviews, cover = cover, crossover = crossover,
+            fandomUrl = fandomUrl
         )
     }
 
@@ -165,7 +167,7 @@ object FanFictionNet : Source {
 
     // ---------- Listes (recherche, parcours d'un fandom) ----------
 
-    fun parseList(html: String, defaultFandom: String = ""): List<Fic> {
+    fun parseList(html: String, defaultFandom: String = "", fandomUrl: String = ""): List<Fic> {
         val doc = Jsoup.parse(html, BASE)
         return doc.select("div.z-list").mapNotNull { z ->
             val a = z.selectFirst("a.stitle") ?: return@mapNotNull null
@@ -188,7 +190,8 @@ object FanFictionNet : Source {
                 genres = meta.genres, characters = meta.characters, status = meta.status, words = meta.words,
                 chapterCount = meta.chapters, published = meta.published, updated = meta.updated,
                 favs = meta.favs, follows = meta.follows, reviews = meta.reviews, cover = cover,
-                crossover = meta.crossover || fandoms.size > 1
+                crossover = meta.crossover || fandoms.size > 1,
+                fandomUrl = if (meta.fandom.isEmpty()) fandomUrl else ""
             )
         }
     }

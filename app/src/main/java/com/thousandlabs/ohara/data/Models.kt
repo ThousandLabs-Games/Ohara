@@ -108,6 +108,8 @@ data class Fic(
     val replies: Int = 0,
     val cover: String = "",
     val crossover: Boolean = false,
+    /** Page du fandom sur le site (FanFiction.net), pour chercher des fics voisines. */
+    val fandomUrl: String = "",
     // ----- côté lecteur -----
     val shelves: Set<String> = emptySet(),
     val addedAt: Long = 0,
@@ -142,7 +144,7 @@ data class Fic(
         put("chapters", JSONArray().also { a -> chapters.forEach { a.put(it.toJson()) } })
         put("pub", published); put("upd", updated); put("favs", favs); put("follows", follows)
         put("reviews", reviews); put("likes", likes); put("views", views); put("replies", replies)
-        put("cover", cover); put("xover", crossover)
+        put("cover", cover); put("xover", crossover); if (fandomUrl.isNotEmpty()) put("fUrl", fandomUrl)
         put("shelves", JSONArray(shelves.toList())); put("added", addedAt); put("opened", lastOpened)
         put("pCh", progressChapter); put("pPos", progressPos.toDouble()); put("maxRead", maxChapterRead)
         put("note", note); put("comment", comment); put("abandon", abandonReason)
@@ -169,7 +171,7 @@ data class Fic(
             published = o.optLong("pub"), updated = o.optLong("upd"), favs = o.optInt("favs"),
             follows = o.optInt("follows"), reviews = o.optInt("reviews"), likes = o.optInt("likes"),
             views = o.optInt("views"), replies = o.optInt("replies"), cover = o.optString("cover"),
-            crossover = o.optBoolean("xover"),
+            crossover = o.optBoolean("xover"), fandomUrl = o.optString("fUrl"),
             shelves = o.optJSONArray("shelves").strings().toSet(), addedAt = o.optLong("added"),
             lastOpened = o.optLong("opened"), progressChapter = o.optInt("pCh"),
             progressPos = o.optDouble("pPos", 0.0).toFloat(), maxChapterRead = o.optInt("maxRead", -1),
@@ -203,7 +205,8 @@ data class Fic(
         favs = if (n.favs > 0) n.favs else favs, follows = if (n.follows > 0) n.follows else follows,
         reviews = if (n.reviews > 0) n.reviews else reviews, likes = if (n.likes > 0) n.likes else likes,
         views = if (n.views > 0) n.views else views, replies = if (n.replies > 0) n.replies else replies,
-        cover = n.cover.ifEmpty { cover }, crossover = n.crossover || crossover
+        cover = n.cover.ifEmpty { cover }, crossover = n.crossover || crossover,
+        fandomUrl = n.fandomUrl.ifEmpty { fandomUrl }
     )
 }
 
