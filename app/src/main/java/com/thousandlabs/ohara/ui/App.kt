@@ -1,6 +1,7 @@
 package com.thousandlabs.ohara.ui
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -72,8 +73,18 @@ fun OharaRoot() {
             Box(Modifier.fillMaxSize()) {
                 BackHandler(enabled = Nav.stack.size == 1 && Nav.tab != Nav.TAB_LIBRARY) { Nav.tab = Nav.TAB_LIBRARY }
                 BackHandler(enabled = Nav.stack.size > 1) { Nav.pop() }
-                val s = Nav.top
-                holder.SaveableStateProvider(s.toString().take(300) + "#" + Nav.stack.size) {
+                val depth = Nav.stack.size
+                androidx.compose.animation.AnimatedContent(
+                    targetState = Nav.top to depth,
+                    transitionSpec = {
+                        val forward = targetState.second >= initialState.second
+                        (androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(180)) +
+                            androidx.compose.animation.slideInHorizontally(androidx.compose.animation.core.tween(220)) { w -> if (forward) w / 8 else -w / 8 }) togetherWith
+                            androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(140))
+                    },
+                    label = "ecrans"
+                ) { (s, d) ->
+                holder.SaveableStateProvider(s.toString().take(300) + "#" + d) {
                     when (s) {
                         Screen.Home -> HomeScreen()
                         is Screen.FicDetail -> FicScreen(s.ficId, s.preview)
@@ -90,6 +101,7 @@ fun OharaRoot() {
                         Screen.HistoryScreen -> HistoryScreen()
                         is Screen.Settings -> SettingsDetailScreen(s.section)
                     }
+                }
                 }
                 SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = 80.dp))
                 if (Locker.locked) LockScreen()

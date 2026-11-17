@@ -75,10 +75,21 @@ object Translate {
                 e.children().none { it.tagName() in BLOCKS && it.text().isNotBlank() }
         }
 
-    suspend fun text(s: String): String {
-        ensureModel()
-        return client.translate(s).await()
+    private val memo = object : LinkedHashMap<String, String>(1024, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, String>?) = size > 6000
     }
+
+    /** Traduit un texte court (un paragraphe) ; les textes déjà vus sont rendus aussitôt. */
+    suspend fun text(s: String): String {
+        synchronized(memo) { memo[s] }?.let { return it }
+        ensureModel()
+        val r = client.translate(s).await()
+        synchronized(memo) { memo[s] = r }
+        return r
+    }
+
+    /** Le modèle est-il déjà sur le téléphone ? (sinon la première traduction le télécharge) */
+    val modelOnPhone: Boolean get() = modelReady || Prefs.getBool("fr_model_ok", false)
 
     /**
      * Traduit un chapitre (HTML) paragraphe par paragraphe.

@@ -56,8 +56,20 @@ object Library {
 
     // ---------- Fics ----------
 
-    fun get(id: String): Fic? = _fics.value.firstOrNull { it.id == id }
-    fun contains(id: String): Boolean = _fics.value.any { it.id == id }
+    @Volatile private var index: Pair<List<Fic>, Map<String, Fic>>? = null
+
+    /** Accès direct par identifiant (recalculé seulement quand la bibliothèque change). */
+    private fun byId(): Map<String, Fic> {
+        val l = _fics.value
+        index?.let { (list, map) -> if (list === l) return map }
+        val m = HashMap<String, Fic>(l.size * 2)
+        for (f in l) m[f.id] = f
+        index = l to m
+        return m
+    }
+
+    fun get(id: String): Fic? = byId()[id]
+    fun contains(id: String): Boolean = byId().containsKey(id)
 
     /** Retrouve une fic par une de ses adresses (y compris les adresses des doublons fusionnés). */
     fun findByUrl(url: String): Fic? = _fics.value.firstOrNull { it.url == url || url in it.altUrls }

@@ -57,11 +57,12 @@ h1.titre { font-size: 1.25em; line-height: 1.3; text-align: center; margin: 0.6e
 .texte a { color: inherit; }
 mark.hl { background: var(--hl); color: inherit; border-radius: 2px; padding: 0 1px; }
 mark.hl.note { border-bottom: 2px solid #D89A00; }
-.ohara-masque { position: relative; max-height: 2.2em; overflow: hidden; opacity: 0.4; margin: 0 0 0.9em; border-left: 2px dashed var(--dim); padding-left: 0.6em; }
-.ohara-masque::before { content: "Passage masqué — touchez pour l'afficher"; display: block; font-family: sans-serif; font-size: 0.7em; color: var(--dim); text-align: left; }
-.ohara-masque > * { visibility: hidden; }
-.ohara-masque.ouvert { max-height: none; opacity: 0.75; } .ohara-masque.ouvert > * { visibility: visible; }
-.ohara-masque.ouvert::before { content: "Passage masqué (touchez pour le replier)"; }
+.ohara-masque.cache { display: none !important; }
+.ohara-masque.repere { position: relative; max-height: 2.2em; overflow: hidden; opacity: 0.4; margin: 0 0 0.9em; border-left: 2px dashed var(--dim); padding-left: 0.6em; }
+.ohara-masque.repere::before { content: "Passage masqué — touchez pour l'afficher"; display: block; font-family: sans-serif; font-size: 0.7em; color: var(--dim); text-align: left; }
+.ohara-masque.repere > * { visibility: hidden; }
+.ohara-masque.repere.ouvert { max-height: none; opacity: 0.75; } .ohara-masque.repere.ouvert > * { visibility: visible; }
+.ohara-masque.repere.ouvert::before { content: "Passage masqué (touchez pour le replier)"; }
 .fin { text-align: center; color: var(--dim); font-family: sans-serif; font-size: 0.75em; margin: 2.5em 0 3em; letter-spacing: 0.08em; }
 section.chap + section.chap { border-top: 1px solid var(--dim); padding-top: 2em; }
 ::selection { background: var(--hl); }
@@ -184,10 +185,36 @@ section.chap + section.chap { border-top: 1px solid var(--dim); padding-top: 2em
 
   function page(dir) { window.scrollBy({ top: dir * (window.innerHeight - 90), behavior: 'smooth' }); }
 
+  // ---- Traduction en place, l'écran visible d'abord ----
+  var tr = { on: false, nodes: [], busy: false };
+  function trKey(e) { var t = e.getBoundingClientRect().top; return t < -40 ? 100000 - t : t; }
+  function trCollect() {
+    if (!tr.on || tr.busy) return;
+    var els = Array.prototype.slice.call(document.querySelectorAll(BLOCKS + ', h1.titre')).filter(function (e) {
+      return !e.__trq && e.textContent.trim().length > 1 && /[A-Za-z]{2}/.test(e.textContent) &&
+        !e.querySelector('p,li,blockquote,td') && !(e.closest('.ohara-masque.cache'));
+    });
+    if (!els.length) { O.trDone(); return; }
+    els.sort(function (a, b) { return trKey(a) - trKey(b); });
+    var batch = els.slice(0, 40).map(function (e) { e.__trq = 1; tr.nodes.push(e); return { i: tr.nodes.length - 1, t: e.textContent.trim() }; });
+    tr.busy = true;
+    O.trTexts(JSON.stringify(batch), els.length);
+  }
+  window.addEventListener('scroll', function () { if (tr.on && !tr.busy) { clearTimeout(tr.t); tr.t = setTimeout(trCollect, 400); } }, { passive: true });
+
   window.ohara = {
+    trOn: function () { tr.on = true; tr.busy = false; trCollect(); },
+    trNext: function () { tr.busy = false; trCollect(); },
+    trSet: function (i, t) { var e = tr.nodes[i]; if (!e) return; if (e.__orig == null) e.__orig = e.innerHTML; e.textContent = t; },
+    trOff: function () {
+      tr.on = false; tr.busy = false;
+      tr.nodes.forEach(function (e) { if (e.__orig != null) { e.innerHTML = e.__orig; e.__orig = null; } e.__trq = 0; });
+      tr.nodes = [];
+    },
     style: function (vars) { for (var k in vars) document.documentElement.style.setProperty(k, vars[k]); },
     show: function (d, pos, cont) {
       st.cont = cont; st.loadingNext = false; st.lastCh = d.ch;
+      tr.on = false; tr.busy = false; tr.nodes = [];
       var c = document.getElementById('contenu'); c.innerHTML = '';
       c.appendChild(section(d));
       requestAnimationFrame(function () { restore(pos); setTimeout(report, 300); });
@@ -197,6 +224,7 @@ section.chap + section.chap { border-top: 1px solid var(--dim); padding-top: 2em
       if (document.querySelector('section.chap[data-ch="' + d.ch + '"]')) { st.loadingNext = false; return; }
       document.getElementById('contenu').appendChild(section(d));
       st.lastCh = d.ch; st.loadingNext = false;
+      if (tr.on && !tr.busy) setTimeout(trCollect, 100);
     },
     endOfBook: function () { st.loadingNext = true; },
     highlight: function (ch, text, note) {

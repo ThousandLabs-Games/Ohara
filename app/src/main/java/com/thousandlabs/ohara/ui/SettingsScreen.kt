@@ -276,8 +276,10 @@ private fun FilterSection() {
 @Composable
 private fun MaskingSection() {
     SwitchRow("Replier les promos automatiquement", "Patreon, Ko-fi, Discord, chapitres en avance, votes WebNovel", Masking.autoPromo) { Masking.autoPromo = it }
-    SwitchRow("Replier les notes d'auteur", "Paragraphes qui commencent par « A/N », « Author's note »…", Masking.authorNotes) { Masking.authorNotes = it }
+    SwitchRow("Replier les notes d'auteur", "« A/N », « Author's note »… y compris sur plusieurs paragraphes", Masking.authorNotes) { Masking.authorNotes = it }
     SwitchRow("Retirer ces passages des exports", "EPUB, TXT et Pack Claude sans les promos", Masking.removeInExports) { Masking.removeInExports = it }
+    SwitchRow("Laisser un repère", "Une ligne discrète « passage masqué » à toucher pour le lire ; sinon le passage disparaît complètement", Masking.showMarker) { Masking.showMarker = it }
+    NoteCard("Une règle reconnaît le passage même si un nombre change (« 10 chapitres d'avance » / « 12 chapitres d'avance ») ou si quelques mots diffèrent. Les notes d'auteur sur plusieurs paragraphes, en début ou en fin de chapitre, sont masquées en entier.")
     SectionTitle("Vos règles")
     val rules = Masking.rules()
     if (rules.isEmpty()) Text("Dans le lecteur, faites un appui long sur un passage puis « Masquer ce genre de passage ».",

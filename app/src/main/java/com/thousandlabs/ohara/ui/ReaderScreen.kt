@@ -98,6 +98,7 @@ import com.thousandlabs.ohara.translate.Translate
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
@@ -115,7 +116,9 @@ private class Bridge(
     val onProgress: (Int, Float, Float, Float) -> Unit,
     val onNeedNext: (Int) -> Unit,
     val onSelection: (String, Int, String) -> Unit,
-    val onTap: () -> Unit
+    val onTap: () -> Unit,
+    val onTrTexts: (String, Int) -> Unit = { _, _ -> },
+    val onTrDone: () -> Unit = {}
 ) {
     private val main = Handler(Looper.getMainLooper())
     @JavascriptInterface fun ready() = main.post { onReady() }.let { }
@@ -123,6 +126,8 @@ private class Bridge(
     @JavascriptInterface fun needNext(last: Int) = main.post { onNeedNext(last) }.let { }
     @JavascriptInterface fun selection(text: String, ch: Int, para: String) = main.post { onSelection(text, ch, para) }.let { }
     @JavascriptInterface fun tap() = main.post { onTap() }.let { }
+    @JavascriptInterface fun trTexts(json: String, remaining: Int) = main.post { onTrTexts(json, remaining) }.let { }
+    @JavascriptInterface fun trDone() = main.post { onTrDone() }.let { }
 }
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
@@ -156,8 +161,13 @@ fun ReaderScreen(ficId: String, startChapter: Int?) {
     val counted = remember { HashSet<Int>() }
     val chapterWords = remember { HashMap<Int, Int>() }
     val web = remember { mutableStateOf<WebView?>(null) }
-    var fr by remember { mutableStateOf(Translate.enabled) }
-    var translating by remember { mutableStateOf<String?>(null) }
+    /** Traduction du chapitre affiché (une fois), ou de tous les chapitres si « Toujours traduire » est activé. */
+    var trThis by remember { mutableStateOf(Translate.enabled) }
+    var trStatus by remember { mutableStateOf<String?>(null) }
+    var trMenu by remember { mutableStateOf(false) }
+    val trGen = remember { intArrayOf(0) }
+    val trLock = remember { kotlinx.coroutines.sync.Mutex() }
+    var lastSave by remember { mutableLongStateOf(0L) }
     val theme = ReaderPage.theme().also { @Suppress("UNUSED_EXPRESSION") pv }
 
     // ouverture : badges remis à zéro
@@ -193,17 +203,7 @@ fun ReaderScreen(ficId: String, startChapter: Int?) {
         val cur = Library.get(f.id) ?: f
         var html = withContext(Dispatchers.Default) { Masking.applyToHtml(cur, raw).html }
         chapterWords[idx] = Library.countWords(raw)
-        var title = cur.chapters.getOrNull(idx)?.title ?: "Chapitre ${idx + 1}"
-        if (fr) {
-            try {
-                html = Translate.chapter(f.id, idx, html) { msg -> translating = msg }
-                title = runCatching { Translate.text(title) }.getOrDefault(title)
-            } catch (e: kotlinx.coroutines.CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                Toast.show("Traduction impossible (${e.message ?: "pas de connexion pour télécharger le modèle"}) : texte original affiché.")
-            } finally { translating = null }
-        }
+        val title = cur.chapters.getOrNull(idx)?.title ?: "Chapitre ${idx + 1}"
         val hl = JSONArray()
         cur.highlights.filter { it.chapter == idx }.forEach { hl.put(JSONObject().put("t", it.text).put("n", it.note)) }
         val total = cur.totalChapters
@@ -214,13 +214,15 @@ fun ReaderScreen(ficId: String, startChapter: Int?) {
     }
 
     // chargement du chapitre demandé
-    LaunchedEffect(requestCh, reloadKey, ready, fr) {
+    LaunchedEffect(requestCh, reloadKey, ready) {
         if (!ready) return@LaunchedEffect
         loading = true; error = null; verifyUrl = null
         val f = Library.get(ficId) ?: return@LaunchedEffect
         try {
             val json = sectionJson(f, requestCh)
+            trGen[0]++
             web.value?.evaluateJavascript("ohara.show($json, $restorePos, ${Prefs.readerContinuous})", null)
+            if (trThis || Translate.enabled) { trThis = true; web.value?.evaluateJavascript("setTimeout(function(){ohara.trOn()},250)", null) }
             displayCh = requestCh
             Library.update(ficId) { it.copy(progressChapter = requestCh, lastOpened = System.currentTimeMillis()) }
             com.thousandlabs.ohara.data.History.add(com.thousandlabs.ohara.data.History.Kind.FIC, "${f.title} — chapitre ${requestCh + 1}", "fic:${f.id}#$requestCh")
@@ -244,6 +246,8 @@ fun ReaderScreen(ficId: String, startChapter: Int?) {
         if (idx < 0 || idx >= total) return
         if (idx > displayCh) Library.update(ficId) { it.copy(maxChapterRead = maxOf(it.maxChapterRead, displayCh)) }
         restorePos = 0f
+        trThis = Translate.enabled
+        trStatus = null
         requestCh = idx
     }
 
@@ -271,10 +275,15 @@ fun ReaderScreen(ficId: String, startChapter: Int?) {
                         onProgress = { ch, pos, frac, end ->
                             lastActivity = System.currentTimeMillis()
                             displayCh = ch; chFrac = frac
-                            Library.update(ficId) { f ->
-                                var max = f.maxChapterRead
-                                if (end >= 0.97f) max = maxOf(max, ch)
-                                f.copy(progressChapter = ch, progressPos = pos, maxChapterRead = max)
+                            // la position est enregistrée au plus toutes les 2 secondes (le reste de l'appli n'a pas à se redessiner à chaque défilement)
+                            val nowMs = System.currentTimeMillis()
+                            if (nowMs - lastSave > 2000 || end >= 0.97f || ch != (Library.get(ficId)?.progressChapter ?: ch)) {
+                                lastSave = nowMs
+                                Library.update(ficId) { f ->
+                                    var max = f.maxChapterRead
+                                    if (end >= 0.97f) max = maxOf(max, ch)
+                                    f.copy(progressChapter = ch, progressPos = pos, maxChapterRead = max)
+                                }
                             }
                             if (end >= 0.97f && counted.add(ch)) {
                                 val w = chapterWords[ch] ?: 0
@@ -293,7 +302,34 @@ fun ReaderScreen(ficId: String, startChapter: Int?) {
                             }
                         },
                         onSelection = { t, ch, para -> selText = t; selCh = ch; selPara = para; if (t.isNotEmpty()) bars = false },
-                        onTap = { bars = !bars }
+                        onTap = { bars = !bars },
+                        onTrTexts = { json, remaining ->
+                            val gen = trGen[0]
+                            AppScope.launch {
+                                trLock.withLock {
+                                    if (gen != trGen[0]) return@withLock
+                                    try {
+                                        if (!Translate.modelOnPhone) trStatus = "Préparation de la traduction (une seule fois)…"
+                                        Translate.ensureModel()
+                                        trStatus = "Traduction… encore $remaining paragraphe${if (remaining > 1) "s" else ""}"
+                                        val items = org.json.JSONArray(json)
+                                        for (k in 0 until items.length()) {
+                                            if (gen != trGen[0]) return@withLock
+                                            val o = items.getJSONObject(k)
+                                            val fr = Translate.text(o.optString("t"))
+                                            web.value?.evaluateJavascript("ohara.trSet(${o.optInt("i")},${JSONObject.quote(fr)})", null)
+                                        }
+                                        if (gen == trGen[0]) web.value?.evaluateJavascript("ohara.trNext()", null)
+                                    } catch (e: kotlinx.coroutines.CancellationException) {
+                                        throw e
+                                    } catch (e: Exception) {
+                                        trStatus = null
+                                        Toast.show("Traduction impossible : ${e.message ?: "pas de connexion pour préparer la traduction"}.")
+                                    }
+                                }
+                            }
+                        },
+                        onTrDone = { trStatus = null }
                     ), "Ohara")
                     loadDataWithBaseURL("https://lecteur.ohara/", ReaderPage.shell(), "text/html", "utf-8", null)
                     web.value = this
@@ -308,7 +344,6 @@ fun ReaderScreen(ficId: String, startChapter: Int?) {
 
         if (loading) Column(Modifier.align(Alignment.Center).padding(32.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             CircularProgressIndicator(color = theme.fgColor.copy(alpha = 0.6f))
-            translating?.let { Spacer(Modifier.height(12.dp)); Text(it, color = theme.fgColor.copy(alpha = 0.75f), style = MaterialTheme.typography.bodySmall) }
         }
         error?.let { msg ->
             Column(Modifier.align(Alignment.Center).padding(32.dp).clip(RoundedCornerShape(12.dp))
@@ -335,12 +370,30 @@ fun ReaderScreen(ficId: String, startChapter: Int?) {
                         Text(fic.chapters.getOrNull(displayCh)?.title ?: "Chapitre ${displayCh + 1}", style = MaterialTheme.typography.bodySmall,
                             maxLines = 1, overflow = TextOverflow.Ellipsis, color = theme.fgColor.copy(alpha = 0.65f))
                     }
-                    IconButton(onClick = {
-                        fr = !fr; Translate.enabled = fr
-                        restorePos = Library.get(ficId)?.progressPos ?: 0f
-                        requestCh = displayCh
-                        Toast.show(if (fr) "Traduction en français activée (sur le téléphone, sans connexion une fois le modèle téléchargé)." else "Texte original affiché.")
-                    }) { Icon(Icons.Outlined.Translate, if (fr) "Afficher le texte original" else "Traduire en français", tint = if (fr) MaterialTheme.colorScheme.primary else theme.fgColor) }
+                    Box {
+                        IconButton(onClick = { trMenu = true }) {
+                            Icon(Icons.Outlined.Translate, "Traduction", tint = if (trThis) MaterialTheme.colorScheme.primary else theme.fgColor)
+                        }
+                        androidx.compose.material3.DropdownMenu(trMenu, onDismissRequest = { trMenu = false }) {
+                            if (!trThis) androidx.compose.material3.DropdownMenuItem(text = { Text("Traduire ce chapitre") }, onClick = {
+                                trMenu = false; trThis = true; web.value?.evaluateJavascript("ohara.trOn()", null)
+                            })
+                            else androidx.compose.material3.DropdownMenuItem(text = { Text("Afficher le texte original") }, onClick = {
+                                trMenu = false; trThis = false; trGen[0]++; trStatus = null
+                                if (Translate.enabled) { Translate.enabled = false; Toast.show("« Toujours traduire » désactivé.") }
+                                web.value?.evaluateJavascript("ohara.trOff()", null)
+                            })
+                            androidx.compose.material3.DropdownMenuItem(
+                                text = { Text("Toujours traduire l'anglais") },
+                                trailingIcon = { androidx.compose.material3.Checkbox(checked = Translate.enabled, onCheckedChange = null) },
+                                onClick = {
+                                    trMenu = false
+                                    Translate.enabled = !Translate.enabled
+                                    if (Translate.enabled && !trThis) { trThis = true; web.value?.evaluateJavascript("ohara.trOn()", null) }
+                                    Toast.show(if (Translate.enabled) "Chaque chapitre et chaque page en anglais seront traduits automatiquement." else "Traduction automatique désactivée.")
+                                })
+                        }
+                    }
                     IconButton(onClick = { chapters = true }) { Icon(Icons.AutoMirrored.Outlined.FormatListBulleted, "Chapitres") }
                     IconButton(onClick = { settings = true }) { Icon(Icons.Outlined.TextFields, "Affichage") }
                     IconButton(onClick = { Nav.push(Screen.FicDetail(ficId)) }) { Icon(Icons.Outlined.Info, "Fiche de la fic") }
@@ -363,7 +416,7 @@ fun ReaderScreen(ficId: String, startChapter: Int?) {
                         Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
                             Text("Chapitre ${displayCh + 1} sur $total", style = MaterialTheme.typography.labelLarge)
                             Text(
-                                "${Fmt.duration(leftCh * 60 / wpm)} dans ce chapitre · ${Fmt.duration(leftBook * 60 / wpm)} au total",
+                                trStatus ?: "${Fmt.duration(leftCh * 60 / wpm)} dans ce chapitre · ${Fmt.duration(leftBook * 60 / wpm)} au total",
                                 style = MaterialTheme.typography.labelSmall, color = theme.fgColor.copy(alpha = 0.65f)
                             )
                         }
