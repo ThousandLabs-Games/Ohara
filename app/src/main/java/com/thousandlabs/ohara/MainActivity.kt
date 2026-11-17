@@ -37,6 +37,7 @@ class MainActivity : FragmentActivity() {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         Locker.activity = this
+        com.thousandlabs.ohara.net.HiddenHost.container = { if (isDestroyed) null else window.decorView as? android.view.ViewGroup }
         setContent { OharaRoot() }
         if (savedInstanceState == null) {
             handleIntent(intent)

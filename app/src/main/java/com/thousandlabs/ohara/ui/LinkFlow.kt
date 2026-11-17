@@ -161,6 +161,19 @@ object LinkFlow {
         AppScope.launch {
             val autoAdd = info.chapterIndex != null && com.thousandlabs.ohara.data.Prefs.autoAddVisited
             importPage(url, html, force = p?.ficId == info.ficId || autoAdd, shelf = p?.shelf)
+            // WebNovel : chapitre affiché d'une fic connue → gardé directement
+            if (info.site == Site.WN && info.chapterKey != null) Library.get(info.ficId)?.let { f ->
+                val idx = f.chapters.indexOfFirst { it.key == info.chapterKey }
+                if (idx >= 0 && !Library.hasChapter(f.id, idx)) runCatching {
+                    withContext(Dispatchers.Default) {
+                        val el = Jsoup.parse(html, url).let { d -> d.selectFirst(".cha-words") ?: d.selectFirst(".cha-content") ?: d.selectFirst(".chapter_content") }
+                        if (el != null && el.text().length > 200) {
+                            el.select(".para-comment, .j_open_para_comment, .cha-bts, script, style").remove()
+                            Library.writeChapter(f.id, idx, Cleaner.clean(el))
+                        }
+                    }
+                }
+            }
             if (p != null && p.ficId == info.ficId) {
                 pending = null
                 BrowserHolder.verifying = false

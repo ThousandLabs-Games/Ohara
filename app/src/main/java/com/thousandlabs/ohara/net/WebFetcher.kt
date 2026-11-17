@@ -51,7 +51,7 @@ object WebFetcher {
             if (finished) return
             finished = true
             handler.removeCallbacksAndMessages(null)
-            runCatching { web.stopLoading(); web.destroy() }
+            runCatching { web.stopLoading(); HiddenHost.detach(web); web.destroy() }
             CookieManager.getInstance().flush()
             if (cont.isActive) result.fold({ cont.resume(it) }, { cont.resumeWithException(it) })
         }
@@ -112,6 +112,7 @@ object WebFetcher {
 
         handler.postDelayed({ done(Result.failure(if (sawChallenge) VerificationNeeded(url) else IOException("La page met trop de temps à répondre."))) }, timeoutMs + 5000)
         cont.invokeOnCancellation { handler.post { done(Result.failure(IOException("Annulé"))) } }
+        HiddenHost.attach(web)
         web.loadUrl(if (Http.isFfn(url)) Http.desktopUrl(url) else url)
     }
 }

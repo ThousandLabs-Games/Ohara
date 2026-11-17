@@ -238,6 +238,9 @@ fun GuideScreen() {
 
 private val VERSIONS = listOf(
     "Améliorations — 17 novembre 2026 (après-midi)" to listOf(
+        "WebNovel : si son interface de données refuse, Ohara lit directement le sommaire et les pages du site ; le chapitre affiché dans le navigateur est gardé tel quel.",
+        "Le navigateur invisible d'Ohara tourne désormais derrière l'écran de l'appli, ce qui lui permet de passer les protections anti-robot automatiques.",
+        "Les messages d'erreur indiquent la page qui a posé problème.",
         "WebNovel fonctionne : les demandes au site partent désormais d'une vraie page du site, et Ohara ne confond plus les pages normales avec une vérification anti-robot (même correction pour SpaceBattles).",
         "Les pages FanFiction.net et WebNovel, ouvertes en version ordinateur, sont remises à la largeur du téléphone.",
         "Traduction en un bouton dans le navigateur : toutes les pages s'affichent en français tant qu'elle est activée.",

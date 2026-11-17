@@ -53,7 +53,7 @@ object ApiBrowser {
     }
 
     private fun drop(host: String) {
-        views.remove(host)?.first?.let { runCatching { it.destroy() } }
+        views.remove(host)?.first?.let { runCatching { HiddenHost.detach(it); it.destroy() } }
     }
 
     private suspend fun eval(web: WebView, js: String): String = suspendCancellableCoroutine { c ->
@@ -72,6 +72,7 @@ object ApiBrowser {
         w.settings.userAgentString = Http.userAgentFor(url)
         CookieManager.getInstance().setAcceptThirdPartyCookies(w, true)
         w.webViewClient = WebViewClient()
+        HiddenHost.attach(w)
         w.loadUrl(url)
         val start = System.currentTimeMillis()
         var challenge = false
@@ -82,7 +83,7 @@ object ApiBrowser {
             challenge = s.startsWith("C")
             if (!challenge && s.getOrNull(1) == 'R') break
             if (System.currentTimeMillis() - start > 25_000) {
-                runCatching { w.destroy() }
+                runCatching { HiddenHost.detach(w); w.destroy() }
                 throw if (challenge) VerificationNeeded(url) else IOException("Le site ne répond pas.")
             }
         }
