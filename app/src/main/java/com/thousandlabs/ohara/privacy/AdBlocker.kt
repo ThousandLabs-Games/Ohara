@@ -353,6 +353,42 @@ object AdBlocker {
             val o = all(); o.remove(host); Prefs.putString("hide_user", o.toString())
         }
 
+        /** Éléments masqués qui s'appliquent à ce site : (clé du site, sélecteur). */
+        fun entries(host: String): List<Pair<String, String>> {
+            val o = all()
+            val out = ArrayList<Pair<String, String>>()
+            for (k in o.keys()) if (host == k || host.endsWith(".$k")) {
+                val a = o.getJSONArray(k)
+                for (i in 0 until a.length()) out += k to a.getString(i)
+            }
+            return out
+        }
+
+        /**
+         * Correctif : avant la v1.42, toucher une phrase avec « Masquer un élément » pouvait masquer
+         * tous les paragraphes des chapitres sur tout le site. Ces règles sont retirées une fois.
+         */
+        fun repairOnce() {
+            if (Prefs.getBool("hide_fix_142", false)) return
+            Prefs.putBool("hide_fix_142", true)
+            val text = Regex("storytext|storycontent|cha-words|cha-paragraph|cha-content|chapter|bbwrapper|message-body|message-content|content-wrap", RegexOption.IGNORE_CASE)
+            val bare = Regex("^(p|span|div|br|em|strong|i|b|font|center|blockquote)$", RegexOption.IGNORE_CASE)
+            val o = all()
+            for (k in o.keys().asSequence().toList()) {
+                val a = o.getJSONArray(k)
+                val fic = Privacy.isSourceHost(k)
+                val kept = org.json.JSONArray()
+                for (i in 0 until a.length()) {
+                    val sel = a.getString(i)
+                    val last = sel.substringAfterLast('>').trim()
+                    if (fic && (text.containsMatchIn(sel) || bare.matches(last))) continue
+                    kept.put(sel)
+                }
+                if (kept.length() == 0) o.remove(k) else o.put(k, kept)
+            }
+            Prefs.putString("hide_user", o.toString())
+        }
+
         fun sites(): List<Pair<String, Int>> {
             val o = all()
             return o.keys().asSequence().map { it to (o.optJSONArray(it)?.length() ?: 0) }.toList()

@@ -46,9 +46,9 @@ object PageMask {
      */
     private const val SEG_JS = """
 var BLK=/^(P|DIV|LI|BLOCKQUOTE|CENTER|TD|TR|TABLE|UL|OL|H[1-6]|HR|SECTION|ARTICLE)$/;
-function segs(b){var out=[],cur={nodes:[],text:''};function push(){if(cur.text.trim())out.push(cur);cur={nodes:[],text:''};}
+function segs(b,inl){var out=[],cur={nodes:[],text:''};function push(){if(cur.text.trim())out.push(cur);cur={nodes:[],text:''};}
 (function walk(n){for(var c=n.firstChild;c;c=c.nextSibling){if(c.nodeType===3){cur.nodes.push({n:c,o:cur.text.length});cur.text+=c.nodeValue;}
-else if(c.nodeType===1){if(c.hasAttribute('data-oh-m')||c.hasAttribute('data-oh-shown'))continue;if(c.tagName==='BR'){push();}else if(BLK.test(c.tagName)){push();walk(c);push();}else if(c.tagName!=='SCRIPT'&&c.tagName!=='STYLE')walk(c);}}})(b);push();return out;}
+else if(c.nodeType===1){if(c.hasAttribute('data-oh-m')||c.hasAttribute('data-oh-shown'))continue;if(c.tagName==='BR'){push();}else if(BLK.test(c.tagName)){push();if(!inl)walk(c);push();}else if(c.tagName!=='SCRIPT'&&c.tagName!=='STYLE')walk(c);}}})(b);push();return out;}
 function sentences(t){var r=[],re=/[^.!?…]+(?:[.!?…]+["'”’»)]*|$)/g,m;while((m=re.exec(t))){if(m[0].length===0){re.lastIndex++;continue;}if(m[0].trim())r.push({s:m.index,e:m.index+m[0].length,t:m[0]});}return r;}
 function rangeOf(seg,s,e){var r=document.createRange(),st=null,en=null;for(var i=0;i<seg.nodes.length;i++){var x=seg.nodes[i],L=x.n.nodeValue.length;
 if(st===null&&s<x.o+L){r.setStart(x.n,Math.max(0,s-x.o));st=1;}if(st!==null&&e<=x.o+L){r.setEnd(x.n,Math.max(0,e-x.o));en=1;break;}}
@@ -59,27 +59,37 @@ if(st===null)return null;if(en===null){var l=seg.nodes[seg.nodes.length-1];r.set
 window.__ohMaskCfg=cfg;
 $SEG_JS
 function norm(s){return s.toLowerCase().replace(/[‘’“”]/g,"'").replace(/\d+/g,'#').replace(/[^\p{L}#']+/gu,' ').replace(/\s+/g,' ').trim();}
-function words(s){return s.split(' ').filter(function(w){return w.length>=3;});}
+/* Mots porteurs seulement : les mots courants (the, and, you, que, les…) ne comptent pas pour la ressemblance. */
+var STOP={};("the and you your for with that this was were are not but have has had from they them their there then than what when where which will would could should into onto about after before again just only also very much more most some such over under been being its it's his her him she he our out can all any one two who why how did does doing done get got let make made said says say like know see saw look looked back now well even still way here yes yeah que les des une est pas pour dans par sur qui avec mais vous nous elle ils son ses aux sont été chapter chapters").split(' ').forEach(function(w){STOP[w]=1;});
+function words(s){return s.split(' ').filter(function(w){return w.length>=4&&!STOP[w];});}
 /* Un texte ne correspond à une règle que s'il a à peu près sa taille : une phrase ne fait jamais masquer tout un chapitre. */
 function fits(n,p){return n.length<=Math.max(p.length*2.5,p.length+160);}
-function match(n,p){p=norm(p);if(!p||!fits(n,p))return false;if(n.indexOf(p)>=0)return true;var pw=words(p);if(pw.length<4)return false;
-var set={};words(n).forEach(function(w){set[w]=1;});var c=0;pw.forEach(function(w){if(set[w])c++;});return c>=Math.max(3,Math.floor(pw.length*0.75));}
+function match(n,p){p=norm(p);if(!p||!fits(n,p))return false;if(n.indexOf(p)>=0)return true;
+/* ressemblance : 80 % des mots porteurs de la règle, au moins 4, et une longueur proche */
+if(n.length<p.length*0.6||n.length>p.length*1.8)return false;var pw=words(p).filter(function(w,i,a){return a.indexOf(w)===i;});if(pw.length<4)return false;
+var set={};words(n).forEach(function(w){set[w]=1;});var c=0;pw.forEach(function(w){if(set[w])c++;});return c>=Math.max(4,Math.ceil(pw.length*0.8));}
 var AN=/^\s*(a\/n|an:|a\.n\.|author'?s'? notes?|note de l'auteur)\b/i;
 function root(c){if(!c.sel)return document.body;var best=null,len=0;document.querySelectorAll(c.sel).forEach(function(e){var l=(e.innerText||'').length;if(l>len){len=l;best=e;}});return best||document.body;}
-function blocks(r){return Array.prototype.filter.call(r.querySelectorAll('p,li,blockquote,center,h2,h3,h4,td,div'),function(e){return !e.closest('[data-oh-m]')&&!e.querySelector('p,li,blockquote,div,td,center')&&(e.textContent||'').trim().length>0;});}
+function cands(r){return [r].concat(Array.prototype.slice.call(r.querySelectorAll('p,li,blockquote,center,h2,h3,h4,td,div'))).filter(function(e){return !e.closest('[data-oh-m]')&&(e.textContent||'').trim().length>0;});}
+function leaf(e){return !e.querySelector('p,li,blockquote,div,td,center');}
 function marker(e){if(!window.__ohMaskCfg.marker)return;var m=document.createElement('div');m.className='oh-mk';m.textContent='Passage masqué — touchez pour l\'afficher';
 m.style.cssText='font:12px sans-serif;opacity:.55;border-left:2px dashed currentColor;padding:2px 8px;margin:6px 0;cursor:pointer';
 m.onclick=function(){e.style.display='';e.setAttribute('data-oh-shown','1');m.remove();};e.parentNode.insertBefore(m,e);}
-function hide(e){e.setAttribute('data-oh-m','1');marker(e);e.style.setProperty('display','none','important');}
-function hideRange(r){if(!r)return;var sp=document.createElement('span');sp.setAttribute('data-oh-m','1');
+/* Garde-fou : jamais plus d'un tiers du texte du chapitre masqué, quelle que soit la règle. */
+var budget=0;function room(len){if(budget===Infinity)return true;if(len>budget)return false;budget-=len;return true;}
+function hide(e){if(!room((e.textContent||'').length))return;e.setAttribute('data-oh-m','1');marker(e);e.style.setProperty('display','none','important');}
+function hideRange(r){if(!r||!room(r.toString().length))return;var sp=document.createElement('span');sp.setAttribute('data-oh-m','1');
 try{sp.appendChild(r.extractContents());r.insertNode(sp);}catch(x){return;}sp.style.setProperty('display','none','important');marker(sp);
 var nx=sp.nextSibling;if(nx&&nx.nodeType===1&&nx.tagName==='BR'){nx.setAttribute('data-oh-br','1');nx.style.display='none';}}
 function bad(t,n,c,re){return c.rules.some(function(p){return match(n,p);})||(re&&t.length<900&&re.test(t));}
-function scan(){var c=window.__ohMaskCfg;if(!document.body||c.off)return;var re=c.promo?new RegExp(c.re,'i'):null;var r=root(c);var list=blocks(r);
-list.forEach(function(e,i){if(e.getAttribute('data-oh-m')||e.getAttribute('data-oh-shown'))return;var t=e.textContent||'';var n=norm(t);
-if(t.length<=900&&(bad(t,n,c,re)||(c.an&&AN.test(t)&&(i<6||i>list.length-10)))){hide(e);return;}
-/* bloc long (texte coupé par des sauts de ligne) : on cherche ligne par ligne, puis phrase par phrase */
-var ss=segs(e);for(var k=ss.length-1;k>=0;k--){var sg=ss[k],st=sg.text,sn=norm(st);if(!sn)continue;
+function scan(){var c=window.__ohMaskCfg;if(!document.body||c.off)return;var re=c.promo?new RegExp(c.re,'i'):null;var r=root(c);var total=(r.textContent||'').length;
+var done=0;r.querySelectorAll('[data-oh-m]').forEach(function(x){done+=(x.textContent||'').length;});
+budget=total<1500?Infinity:Math.max(0,total*0.34-done);
+var all=cands(r),list=all.filter(leaf);
+all.forEach(function(e){if(e.getAttribute('data-oh-m')||e.getAttribute('data-oh-shown'))return;var lf=leaf(e);var i=list.indexOf(e);var t=e.textContent||'';var n=norm(t);
+if(lf&&t.length<=900&&(bad(t,n,c,re)||(c.an&&AN.test(t)&&(i<6||i>list.length-10)))){hide(e);return;}
+/* bloc long, ou texte posé directement dans un bloc (coupé par des sauts de ligne) : ligne par ligne, puis phrase par phrase */
+var ss=segs(e,!lf);for(var k=ss.length-1;k>=0;k--){var sg=ss[k],st=sg.text,sn=norm(st);if(!sn)continue;
 if(st.length<=900&&bad(st,sn,c,re)){hideRange(rangeOf(sg,0,st.length));continue;}
 if(!c.rules.length)continue;var ph=sentences(st);for(var j=ph.length-1;j>=0;j--){var q=ph[j];if(c.rules.some(function(p){return match(norm(q.t),p);}))hideRange(rangeOf(sg,q.s,q.e));}}});}
 window.__ohMaskScan=scan;scan();

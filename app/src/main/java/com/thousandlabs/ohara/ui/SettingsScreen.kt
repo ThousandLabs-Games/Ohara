@@ -206,6 +206,20 @@ private fun ReadingSection() {
     SwitchRow("Glisser pour changer de chapitre", "Tout en bas d'un chapitre, continuez à faire défiler vers le bas en gardant le doigt une seconde : chapitre suivant. Tout en haut, continuez vers le haut : chapitre précédent", PageTools.pullNav) { PageTools.pullNav = it }
     SectionTitle("Mode lecture")
     SwitchRow("Toujours ouvrir les chapitres en mode lecture", "Seulement le texte, avec votre police, votre taille et votre thème. Réglez l'affichage depuis le menu du navigateur, en mode lecture", PageTools.autoReader) { PageTools.autoReader = it }
+    SectionTitle("Autres fonctions des pages")
+    listOf(SiteRules.Feature.MASK, SiteRules.Feature.SELECT, SiteRules.Feature.LINKS).forEach { f ->
+        SwitchRow(f.label, f.sub, f.global) { f.global = it }
+    }
+    SectionTitle("Réglages par site")
+    Text("Dans le navigateur, menu › « Réglages de ce site » pour couper une fonction sur un site seulement. « Glisser pour changer de chapitre » est coupé d'office sur WebNovel, qui enchaîne déjà les chapitres.",
+        Modifier.padding(horizontal = 16.dp), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    SiteRules.hosts().forEach { h ->
+        val off = SiteRules.Feature.entries.filter { SiteRules.override(it, h) == false }.map { it.label.lowercase() }
+        val on = SiteRules.Feature.entries.filter { SiteRules.override(it, h) == true }.map { it.label.lowercase() }
+        SettingRow(h, listOfNotNull(off.takeIf { it.isNotEmpty() }?.let { "Coupé : " + it.joinToString(", ") }, on.takeIf { it.isNotEmpty() }?.let { "Activé : " + it.joinToString(", ") }).joinToString(" · ")) {
+            IconButton(onClick = { SiteRules.reset(h); Toast.show("$h suit de nouveau les réglages généraux.") }) { Icon(Icons.Outlined.Delete, "Revenir aux réglages généraux") }
+        }
+    }
     SectionTitle("Reprendre une fic")
     SwitchRow("Proposer « Précédemment »", "Quand vous rouvrez une fic laissée depuis ${Recap.afterDays} jours, un résumé des derniers chapitres lus s'affiche", Recap.enabled) { Recap.enabled = it }
     if (Recap.enabled) {

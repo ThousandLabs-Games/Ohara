@@ -63,20 +63,27 @@ function show(txt,bottom,f){if(!ind){ind=document.createElement('div');ind.style
 ind.style.opacity='1';ind.style.bottom=bottom?'28px':'';ind.style.top=bottom?'':'28px';
 ind.innerHTML=txt+'<div style="height:3px;background:rgba(255,255,255,.25);border-radius:2px;margin-top:7px"><div style="height:3px;width:'+Math.round(f*100)+'%;background:#4cc9a0;border-radius:2px"></div></div>';}
 function hide(){if(ind)ind.style.opacity='0';}
-var y0=null,dir=0,t0=0,target=null,timer=null,gone=false;
-function atBottom(){return window.innerHeight+window.scrollY>=document.documentElement.scrollHeight-6;}
-function atTop(){return window.scrollY<=2;}
+var y0=null,dir=0,t0=0,target=null,timer=null,gone=false,edgeB=false,edgeT=false,h0=0;
+window.addEventListener('pageshow',function(){gone=false;hide();});
+function H(){return document.documentElement.scrollHeight;}
+function atBottom(){return window.innerHeight+window.scrollY>=H()-4;}
+function atTop(){return window.scrollY<=1;}
 function stop(){clearInterval(timer);timer=null;}
-function tick(){if(!dir||!target)return;var f=Math.min(1,(Date.now()-t0)/1000);
-show('Chapitre '+(dir>0?'suivant':'précédent')+'…',dir>0,f);
+function cancel(){dir=0;stop();target=null;if(!gone)hide();}
+function tick(){if(!dir||!target)return;
+/* la page s'est allongée (site qui charge la suite) ou a défilé : ce n'est plus un geste au bout du chapitre */
+if(Math.abs(H()-h0)>40||(dir>0&&!atBottom())||(dir<0&&!atTop())){cancel();return;}
+var f=Math.min(1,(Date.now()-t0)/1000);show('Chapitre '+(dir>0?'suivant':'précédent')+'…',dir>0,f);
 if(f>=1&&!gone){gone=true;stop();show('Chargement du chapitre '+(dir>0?'suivant':'précédent'),dir>0,1);location.href=target;}}
-document.addEventListener('touchstart',function(e){y0=e.touches[0].clientY;dir=0;target=null;stop();},{passive:true});
-document.addEventListener('touchmove',function(e){if(y0==null||gone)return;var dy=e.touches[0].clientY-y0;
-var d=(dy<-50&&atBottom())?1:(dy>50&&atTop())?-1:0;
+/* le geste ne compte que s'il commence alors que la page est déjà tout en bas (ou tout en haut) */
+document.addEventListener('touchstart',function(e){if(e.touches.length!==1){y0=null;return;}y0=e.touches[0].clientY;edgeB=atBottom();edgeT=atTop()&&!edgeB;h0=H();cancel();},{passive:true});
+document.addEventListener('touchmove',function(e){if(y0==null||gone)return;if(e.touches.length!==1){y0=null;cancel();return;}var dy=e.touches[0].clientY-y0;
+var d=(edgeB&&dy<-90&&atBottom())?1:(edgeT&&dy>90&&atTop())?-1:0;
 if(d!==dir){dir=d;t0=Date.now();stop();target=d?__ohFind(d):null;
 if(d&&target){timer=setInterval(tick,50);tick();}else if(d){show(d>0?'Pas de chapitre suivant':'Pas de chapitre précédent',d>0,0);}else hide();}
 },{passive:true});
-document.addEventListener('touchend',function(){y0=null;dir=0;stop();if(!gone)hide();},{passive:true});
+document.addEventListener('touchend',function(){y0=null;cancel();},{passive:true});
+document.addEventListener('touchcancel',function(){y0=null;cancel();},{passive:true});
 })();"""
 
     fun readerConfig(info: LinkInfo?): JSONObject {

@@ -274,7 +274,7 @@ fun MaskedSheet(t: Tab, onClose: () -> Unit) {
                 t.web?.evaluateJavascript(PageMask.SHOW_ALL_JS, null); Toast.show("Tout est affiché sur cette page."); onClose()
             }
             HorizontalDivider(Modifier.padding(vertical = 4.dp))
-            if (rules.isEmpty()) Text("Aucune de vos règles ne s'applique ici. Seuls les promos et les notes d'auteur peuvent être masquées d'office (Réglages › Passages masqués).",
+            if (rules.isEmpty()) Text("Aucune de vos règles de texte ne s'applique ici. Seuls les promos et les notes d'auteur peuvent être masquées d'office (Réglages › Passages masqués).",
                 style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(horizontal = 24.dp, vertical = 10.dp))
             rules.forEach { r ->
                 Row(Modifier.fillMaxWidth().padding(start = 24.dp, end = 8.dp, top = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -289,7 +289,61 @@ fun MaskedSheet(t: Tab, onClose: () -> Unit) {
                     }) { Text("Afficher de nouveau") }
                 }
             }
+            val siteHost = remember(t.url) { runCatching { java.net.URI(t.url).host }.getOrNull().orEmpty() }
+            var elements by remember { mutableStateOf(com.thousandlabs.ohara.privacy.AdBlocker.UserHiding.entries(siteHost)) }
+            if (elements.isNotEmpty()) {
+                HorizontalDivider(Modifier.padding(vertical = 4.dp))
+                Text("Éléments masqués sur ce site", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(horizontal = 24.dp, vertical = 4.dp))
+                elements.forEach { (k, sel) ->
+                    Row(Modifier.fillMaxWidth().padding(start = 24.dp, end = 8.dp, top = 4.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text(sel, style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                        TextButton(onClick = {
+                            com.thousandlabs.ohara.privacy.AdBlocker.UserHiding.remove(k, sel)
+                            elements = com.thousandlabs.ohara.privacy.AdBlocker.UserHiding.entries(siteHost)
+                            t.web?.reload()
+                        }) { Text("Afficher de nouveau") }
+                    }
+                }
+            }
             TextButton(onClick = { onClose(); Nav.push(Screen.Settings("masquage")) }, modifier = Modifier.padding(horizontal = 12.dp)) { Text("Toutes les règles") }
+        }
+    }
+}
+
+/** Réglages de ce site : chaque fonction d'Ohara peut être coupée ici seulement. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun SiteSheet(t: Tab, onClose: () -> Unit) {
+    val host = remember(t.url) { SiteRules.host(t.url) }
+    var version by remember { mutableIntStateOf(0) }
+    var changed by remember { mutableStateOf(false) }
+    val cs = MaterialTheme.colorScheme
+    fun close() { if (changed) t.web?.reload(); onClose() }
+    ModalBottomSheet(onDismissRequest = { close() }) {
+        Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
+            Text("Réglages pour $host", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(horizontal = 24.dp))
+            Text("Coupez ici une fonction qui gêne ce site. Les autres sites gardent les réglages généraux (Réglages › Lecture).",
+                style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant, modifier = Modifier.padding(horizontal = 24.dp, vertical = 4.dp))
+            @Suppress("UNUSED_EXPRESSION") version
+            SiteRules.Feature.entries.forEach { f ->
+                val on = SiteRules.on(f, t.url)
+                val own = SiteRules.override(f, host) != null
+                Row(Modifier.fillMaxWidth().clickable { SiteRules.set(f, t.url, !on); version++; changed = true }
+                    .padding(horizontal = 24.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text(f.label, style = MaterialTheme.typography.bodyLarge)
+                        Text(if (own) "Réglé pour ce site" else if (on == f.global) f.sub else "Coupé d'office sur ce site",
+                            style = MaterialTheme.typography.bodySmall, color = if (own) cs.primary else cs.onSurfaceVariant)
+                    }
+                    Switch(on, { SiteRules.set(f, t.url, it); version++; changed = true })
+                }
+            }
+            if (SiteRules.Feature.entries.any { SiteRules.override(it, host) != null })
+                TextButton(onClick = { SiteRules.reset(host); version++; changed = true }, modifier = Modifier.padding(horizontal = 12.dp)) {
+                    Text("Revenir aux réglages généraux pour ce site")
+                }
+            Text("Les changements s'appliquent en rechargeant la page.", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 24.dp, vertical = 4.dp))
         }
     }
 }

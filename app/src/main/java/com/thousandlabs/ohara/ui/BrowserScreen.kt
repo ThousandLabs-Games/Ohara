@@ -200,7 +200,9 @@ object BrowserHolder {
     var showTabs by mutableStateOf(false)
     var verifying by mutableStateOf(false)
     var picking by mutableStateOf(false)
-    var picked by mutableStateOf<Triple<String, String, Int>?>(null)
+    /** Élément choisi avec « Masquer un élément » : sélecteur, texte, nombre d'éléments semblables, dans le texte du chapitre ?, texte complet. */
+    data class Picked(val selector: String, val text: String, val count: Int, val inText: Boolean, val full: String)
+    var picked by mutableStateOf<Picked?>(null)
     var findOpen by mutableStateOf(false)
     /** Lien touché longuement (menu du lien). */
     var linkMenu by mutableStateOf<String?>(null)
@@ -426,7 +428,8 @@ var p=e.tagName.toLowerCase();var cls=Array.prototype.filter.call(e.classList,fu
 if(cls.length)p+='.'+cls.map(esc).join('.');parts.unshift(p);e=e.parentElement;}return parts.join(' > ');}
 function show(el){cur=el;var r=el.getBoundingClientRect();box.style.left=(r.left+window.scrollX)+'px';box.style.top=(r.top+window.scrollY)+'px';
 box.style.width=r.width+'px';box.style.height=r.height+'px';var s=sel(el);var n=0;try{n=document.querySelectorAll(s).length;}catch(x){}
-OharaPick.picked(s,(el.innerText||el.tagName).slice(0,80),n);}
+var c=window.__ohMaskCfg,inT=false;if(c&&c.sel){try{document.querySelectorAll(c.sel).forEach(function(r){if(r.contains(el)||el.contains(r))inT=true;});}catch(x){}}
+OharaPick.picked(s,(el.innerText||el.tagName).slice(0,80),n,inT,(el.textContent||'').trim().slice(0,1000));}
 window.__oharaPickH=function(e){e.preventDefault();e.stopPropagation();show(e.target);};
 document.addEventListener('click',window.__oharaPickH,true);
 window.oharaPick={parent:function(){if(cur&&cur.parentElement&&cur.parentElement!==document.body&&cur.parentElement!==document.documentElement)show(cur.parentElement);},
@@ -437,7 +440,25 @@ hide:function(s){try{document.querySelectorAll(s).forEach(function(x){x.style.se
     fun startPicker() { picking = true; picked = null; web?.evaluateJavascript(PICKER_JS, null) }
     fun stopPicker() { picking = false; picked = null; web?.evaluateJavascript("if(window.oharaPick)oharaPick.stop()", null) }
     fun hidePicked() {
-        val (selector, _, _) = picked ?: return
+        val p = picked ?: return
+        val selector = p.selector
+        // Un morceau du texte du chapitre n'est jamais masqué par élément (cela cacherait tous les paragraphes du site) :
+        // une phrase devient une règle de texte, limitée à cette fic.
+        if (p.inText) {
+            val info = ficInfo(tab.url)
+            if (p.full.length in 4..400 && info != null) {
+                val fic = Library.get(info.ficId) ?: com.thousandlabs.ohara.data.Fic(id = info.ficId, site = info.site, storyId = info.storyId, url = "", title = "")
+                tab.lastMasked = Masking.add(p.full, Masking.Scope.FIC, fic)
+                web?.evaluateJavascript(PageMask.hideNowJs(p.full), null)
+                stopPicker()
+                Toast.show("C'est du texte du chapitre : seul ce passage est masqué, dans cette fic.")
+            } else Toast.show("C'est le texte du chapitre lui-même : il ne peut pas être masqué. Pour une phrase, faites un appui long dessus.")
+            return
+        }
+        if (p.count > 3) {
+            Toast.show("${p.count} éléments semblables sur la page : « Agrandir » pour choisir l'encart entier, sinon trop de choses seraient masquées.")
+            return
+        }
         val host = runCatching { java.net.URI(tab.url).host }.getOrNull() ?: return
         AdBlocker.UserHiding.add(host, selector)
         web?.evaluateJavascript("if(window.oharaPick)oharaPick.hide(${JSONObject.quote(selector)})", null)
@@ -459,20 +480,23 @@ hide:function(s){try{document.querySelectorAll(s).forEach(function(x){x.style.se
     fun pageScripts(w: WebView, u: String, t: Tab) {
         val info = ficInfo(u)
         val chapter = PageTools.isChapter(info, u)
-        w.evaluateJavascript(PageMask.script(PageMask.config(info)), null)
-        w.evaluateJavascript(PageMask.SELECTION_JS, null)
+        val cfg = PageMask.config(info)
+        // Masquage coupé sur ce site : le script reste chargé (il sert à « Masquer un élément ») mais ne cache rien.
+        if (!SiteRules.on(SiteRules.Feature.MASK, u)) cfg.put("off", true)
+        w.evaluateJavascript(PageMask.script(cfg), null)
+        if (SiteRules.on(SiteRules.Feature.SELECT, u)) w.evaluateJavascript(PageMask.SELECTION_JS, null)
         if (chapter && !t.private) w.evaluateJavascript(ReadTracker.script(info!!), null)
-        if (PageTools.pullNav && (chapter || t.offline)) {
+        if (SiteRules.on(SiteRules.Feature.PULL, u) && (chapter || t.offline)) {
             val (prev, next) = if (info != null) PageTools.neighbours(u, info) else null to null
             w.evaluateJavascript(PageTools.pullScript(prev, next), null)
         }
         // Le mode lecture suit la lecture de chapitre en chapitre, mais ne s'applique pas aux autres pages (sommaire, recherche…).
         if (t.readerMode && !chapter && t.readerUrl != u) t.readerMode = false
-        if (!t.offline && ((t.readerMode && (chapter || t.readerUrl == u)) || (PageTools.autoReader && chapter))) {
+        if (!t.offline && ((t.readerMode && (chapter || t.readerUrl == u)) || (SiteRules.on(SiteRules.Feature.READER, u) && chapter))) {
             t.readerMode = true
             w.evaluateJavascript(PageTools.readerScript(PageTools.readerConfig(info)), null)
         }
-        PageTranslator.inject(w)
+        if (SiteRules.on(SiteRules.Feature.TRANSLATE, u)) PageTranslator.inject(w)
     }
 
     fun toggleReader(t: Tab) {
@@ -481,7 +505,7 @@ hide:function(s){try{document.querySelectorAll(s).forEach(function(x){x.style.se
         t.readerMode = true
         t.readerUrl = t.url
         val info = ficInfo(t.url)
-        if (PageTools.pullNav) { val (p, n) = if (info != null) PageTools.neighbours(t.url, info) else null to null; w.evaluateJavascript(PageTools.pullScript(p, n), null) }
+        if (SiteRules.on(SiteRules.Feature.PULL, t.url)) { val (p, n) = if (info != null) PageTools.neighbours(t.url, info) else null to null; w.evaluateJavascript(PageTools.pullScript(p, n), null) }
         w.evaluateJavascript(PageTools.readerScript(PageTools.readerConfig(info)), null)
     }
 
@@ -503,14 +527,14 @@ hide:function(s){try{document.querySelectorAll(s).forEach(function(x){x.style.se
         w.setOnLongClickListener {
             val r = w.hitTestResult
             val link = r.extra
-            if ((r.type == WebView.HitTestResult.SRC_ANCHOR_TYPE || r.type == WebView.HitTestResult.SRC_IMAGE_ANCHOR_TYPE) && !link.isNullOrBlank() && link.startsWith("http")) {
+            if (SiteRules.on(SiteRules.Feature.LINKS, t.url) && (r.type == WebView.HitTestResult.SRC_ANCHOR_TYPE || r.type == WebView.HitTestResult.SRC_IMAGE_ANCHOR_TYPE) && !link.isNullOrBlank() && link.startsWith("http")) {
                 linkMenu = link; true
             } else false
         }
         w.settings.userAgentString = if (t.desktop) Http.desktopUserAgent else Http.userAgent
         val main = Handler(Looper.getMainLooper())
         w.addJavascriptInterface(object {
-            @JavascriptInterface fun picked(selector: String, text: String, count: Int) { main.post { picked = Triple(selector, text, count) } }
+            @JavascriptInterface fun picked(selector: String, text: String, count: Int, inText: Boolean, full: String) { main.post { picked = Picked(selector, text, count, inText, full) } }
         }, "OharaPick")
         w.addJavascriptInterface(object {
             @JavascriptInterface fun report(words: Int, fraction: Float, meta: String) {
@@ -527,14 +551,26 @@ hide:function(s){try{document.querySelectorAll(s).forEach(function(x){x.style.se
             @JavascriptInterface fun selection(text: String, para: String) { main.post { t.selection = if (text.isBlank()) null else text to para } }
         }, "OharaSel")
         PageTranslator.attach(w)
-        w.setOnScrollChangeListener { _, _, y, _, oldY ->
-            if (!autoHideBars || t !== tab) return@setOnScrollChangeListener
+        var lastToggle = 0L
+        var acc = 0
+        w.setOnScrollChangeListener { v, _, y, _, oldY ->
+            if (t !== tab || !SiteRules.on(SiteRules.Feature.BARS, t.url)) { if (!barsVisible) barsVisible = true; return@setOnScrollChangeListener }
+            val now = android.os.SystemClock.uptimeMillis()
+            // Quand les barres apparaissent ou disparaissent, la page change de hauteur et défile d'elle-même :
+            // ces mouvements-là sont ignorés, sinon les barres clignotent en bas d'un chapitre.
+            if (now - lastToggle < 450) { acc = 0; return@setOnScrollChangeListener }
+            val wv = v as WebView
+            val bottom = y + wv.height >= (wv.contentHeight * wv.scale).toInt() - 8
             val dy = y - oldY
-            when {
-                y < 60 -> barsVisible = true
-                dy > 14 -> barsVisible = false
-                dy < -30 -> barsVisible = true
+            acc = if ((acc > 0) == (dy > 0)) acc + dy else dy
+            val want = when {
+                y < 60 -> true
+                bottom -> barsVisible
+                acc > 40 -> false
+                acc < -90 -> true
+                else -> barsVisible
             }
+            if (want != barsVisible) { barsVisible = want; lastToggle = now; acc = 0 }
         }
         w.setFindListener { active, count, done -> if (done) findInfo = if (count == 0) "Aucun résultat" else "${active + 1} / $count" }
         w.webChromeClient = object : WebChromeClient() {
@@ -706,8 +742,10 @@ fun BrowserHome() {
     var readerStyle by remember { mutableStateOf(false) }
     var claudeFic by remember { mutableStateOf<String?>(null) }
     var maskedSheet by remember { mutableStateOf(false) }
-    if (menu) BrowserMenu(t, context, onBookmark = { bookmarkDialog = true }, onReaderStyle = { readerStyle = true }, onClaude = { claudeFic = it }, onMasked = { maskedSheet = true }) { menu = false }
+    var siteSheet by remember { mutableStateOf(false) }
+    if (menu) BrowserMenu(t, context, onBookmark = { bookmarkDialog = true }, onReaderStyle = { readerStyle = true }, onClaude = { claudeFic = it }, onMasked = { maskedSheet = true }, onSite = { siteSheet = true }) { menu = false }
     if (maskedSheet) MaskedSheet(t) { maskedSheet = false }
+    if (siteSheet) SiteSheet(t) { siteSheet = false }
     claudeFic?.let { id -> Library.get(id)?.let { f -> ClaudeSheet(f) { claudeFic = null } } ?: run { claudeFic = null } }
     if (bookmarkDialog) BookmarkDialog(t.title.ifBlank { t.url }, t.url) { bookmarkDialog = false }
     if (readerStyle) ReaderStyleSheet(t) { readerStyle = false }
@@ -944,10 +982,14 @@ private fun PickerBar() {
     Surface(color = MaterialTheme.colorScheme.surfaceContainerHigh, shadowElevation = 6.dp) {
         Column(Modifier.fillMaxWidth().padding(12.dp)) {
             val p = h.picked
-            Text(if (p == null) "Touchez l'élément à masquer (bannière, encart, bouton…)." else "Sélection : ${p.second.ifBlank { p.first }}",
+            Text(if (p == null) "Touchez l'élément à masquer (bannière, encart, bouton…)." else "Sélection : ${p.text.ifBlank { p.selector }}",
                 style = MaterialTheme.typography.bodyMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
-            if (p != null) Text("${Fmt.plural(p.third, "élément")} sur la page · reste masqué sur tout le site",
-                style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (p != null) Text(when {
+                p.inText -> "Texte du chapitre : seul ce passage sera masqué, dans cette fic"
+                p.count > 3 -> "${p.count} éléments semblables : touchez « Agrandir » pour choisir l'encart entier"
+                else -> "${Fmt.plural(p.count, "élément")} sur la page · reste masqué sur tout le site"
+            }, style = MaterialTheme.typography.labelSmall,
+                color = if (p.count > 3 && !p.inText) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(Modifier.height(8.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedButton(onClick = { h.web?.evaluateJavascript("if(window.oharaPick)oharaPick.parent()", null) }, enabled = p != null) { Text("Agrandir") }
@@ -995,7 +1037,7 @@ fun MenuTile(icon: ImageVector, label: String, active: Boolean = false, enabled:
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
-private fun BrowserMenu(t: Tab, context: Context, onBookmark: () -> Unit, onReaderStyle: () -> Unit, onClaude: (String) -> Unit, onMasked: () -> Unit, onClose: () -> Unit) {
+private fun BrowserMenu(t: Tab, context: Context, onBookmark: () -> Unit, onReaderStyle: () -> Unit, onClaude: (String) -> Unit, onMasked: () -> Unit, onSite: () -> Unit, onClose: () -> Unit) {
     val h = BrowserHolder
     val info = h.ficInfo(t.url)
     val inLib = info != null && Library.contains(info.ficId)
@@ -1044,6 +1086,7 @@ private fun BrowserMenu(t: Tab, context: Context, onBookmark: () -> Unit, onRead
                 MenuTile(Icons.Outlined.FindInPage, "Rechercher dans la page", enabled = !t.isStart) { onClose(); h.findOpen = true }
                 MenuTile(Icons.Outlined.TouchApp, "Masquer un élément", enabled = !t.isStart) { onClose(); h.startPicker() }
                 MenuTile(Icons.Outlined.Visibility, "Passages masqués", enabled = !t.isStart) { onClose(); onMasked() }
+                MenuTile(Icons.Outlined.Tune, "Réglages de ce site", enabled = !t.isStart && !t.offline) { onClose(); onSite() }
                 val adOn = !t.isStart && AdBlocker.enabledOn(t.url)
                 MenuTile(Icons.Outlined.Shield, if (adOn) "Bloqueur actif" else "Bloqueur coupé ici", active = adOn, enabled = !t.isStart) {
                     onClose()

@@ -76,17 +76,26 @@ object Masking {
         .replace(Regex("[^\\p{L}#']+"), " ")
         .replace(Regex("\\s+"), " ").trim()
 
-    private fun words(s: String) = s.split(' ').filter { it.length >= 3 }.toSet()
+    /** Mots courants ignorés pour la ressemblance : sinon une phrase de promo « ressemble » à n'importe quel paragraphe. */
+    private val STOP = ("the and you your for with that this was were are not but have has had from they them their there then than what when where which " +
+        "will would could should into onto about after before again just only also very much more most some such over under been being its it's his her him " +
+        "she he our out can all any one two who why how did does doing done get got let make made said says say like know see saw look looked back now well " +
+        "even still way here yes yeah que les des une est pas pour dans par sur qui avec mais vous nous elle ils son ses aux sont été chapter chapters").split(' ').toSet()
 
-    /** Le paragraphe correspond-il à la règle ? Texte contenu, ou au moins 75 % des mots de la règle présents. */
+    private fun words(s: String) = s.split(' ').filter { it.length >= 4 && it !in STOP }.toSet()
+
+    /**
+     * Le passage correspond-il à la règle ? Il doit avoir à peu près la taille de la règle (une phrase ne fait jamais
+     * masquer tout un chapitre), puis contenir la règle, ou au moins 80 % de ses mots porteurs (4 au minimum).
+     */
     private fun matches(n: String, phrase: String): Boolean {
-        // Le passage doit avoir à peu près la taille de la règle : une phrase ne fait jamais masquer tout un chapitre.
         if (phrase.isEmpty() || n.length > maxOf(phrase.length * 2.5, phrase.length + 160.0)) return false
         if (n.contains(phrase)) return true
+        if (n.length < phrase.length * 0.6 || n.length > phrase.length * 1.8) return false
         val pw = words(phrase)
         if (pw.size < 4) return false
         val nw = words(n)
-        return pw.count { it in nw } >= (pw.size * 0.75).toInt().coerceAtLeast(3)
+        return pw.count { it in nw } >= maxOf(4, Math.ceil(pw.size * 0.8).toInt())
     }
 
     private val PROMO = Regex(
@@ -141,7 +150,12 @@ object Masking {
         val rules = rules()
         val list = blocks(doc)
         val flagged = BooleanArray(list.size)
-        list.forEachIndexed { i, el -> if (reason(el.text(), fic, rules) != null) flagged[i] = true }
+        val byRule = BooleanArray(list.size)
+        list.forEachIndexed { i, el -> reason(el.text(), fic, rules)?.let { flagged[i] = true; byRule[i] = it == "règle" } }
+        // Garde-fou : des règles qui masqueraient plus d'un tiers du chapitre sont ignorées pour ce chapitre.
+        val total = list.sumOf { it.text().length }
+        val ruled = list.indices.filter { byRule[it] }.sumOf { list[it].text().length }
+        if (total > 1500 && ruled > total * 0.34) list.indices.filter { byRule[it] }.forEach { flagged[it] = false }
         // Notes d'auteur sur plusieurs paragraphes : d'un « A/N » en début de chapitre jusqu'au séparateur,
         // et d'un « A/N » en fin de chapitre jusqu'à la fin.
         if (authorNotes && list.isNotEmpty()) {
