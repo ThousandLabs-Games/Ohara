@@ -12,7 +12,9 @@ import java.util.zip.GZIPInputStream
 class Page(val code: Int, val body: String, val url: String)
 
 /** Le site demande une vérification (« Je ne suis pas un robot ») que seul le lecteur peut faire. */
-class VerificationNeeded(val url: String) : IOException("Le site demande une vérification.")
+class VerificationNeeded(val url: String) : IOException(
+    "Le site demande une vérification (" + url.substringAfter("://").substringBefore('?').take(70) + ")."
+)
 
 /** Le site a répondu par une erreur (404 : page introuvable, la fic a sans doute été supprimée). */
 class SiteError(val code: Int, val url: String) : IOException(

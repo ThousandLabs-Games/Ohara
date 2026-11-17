@@ -43,6 +43,52 @@ object WebNovel : Source {
     }
 
     override suspend fun fetchInfo(storyId: String): Fic {
+        // 1. interface de données du site ; 2. en secours, lecture des pages (sommaire et page du livre)
+        val api = runCatching { fetchInfoApi(storyId) }
+        api.getOrNull()?.let { return it }
+        return runCatching { fetchInfoPages(storyId) }.getOrElse { e ->
+            throw IOException("WebNovel illisible (données : ${api.exceptionOrNull()?.message} ; pages : ${e.message})")
+        }
+    }
+
+    /** Lecture du sommaire (/catalog) et de la page du livre, affichés dans le navigateur invisible. */
+    private suspend fun fetchInfoPages(storyId: String): Fic {
+        val book = storyUrl(storyId)
+        val cat = Fetcher.get("$book/catalog", needsJs = true,
+            readyJs = "document.querySelectorAll('a[data-cid],a[href*=\"/book/\"]').length>8").body
+        val cdoc = Jsoup.parse(cat, BASE)
+        val chapRe = Regex("/book/(?:[^/?#]*_)?$storyId/(?:[^/?#]*_)?(\\d{8,})")
+        val chapters = mutableListOf<ChapterInfo>()
+        val seen = HashSet<String>()
+        for (a in cdoc.select("a[href]")) {
+            val href = a.attr("href")
+            val cid = a.attr("data-cid").takeIf { it.length >= 8 } ?: chapRe.find(href)?.groupValues?.get(1) ?: continue
+            if (!seen.add(cid)) continue
+            val name = a.attr("title").ifBlank { a.selectFirst("strong")?.text().orEmpty() }.ifBlank { a.text() }.trim()
+            val locked = a.select("use").any { it.attr("xlink:href").contains("lock") || it.attr("href").contains("lock") } ||
+                a.select("[class*=lock]").isNotEmpty()
+            chapters += ChapterInfo(name.ifBlank { "Chapitre ${chapters.size + 1}" }, "$BASE/book/$storyId/$cid", key = cid, locked = locked)
+        }
+        if (chapters.isEmpty()) throw IOException("sommaire vide")
+        val bdoc = runCatching {
+            Jsoup.parse(Fetcher.get(book, needsJs = true, readyJs = "!!document.querySelector('meta[property=\"og:title\"],h1')").body, BASE)
+        }.getOrNull() ?: cdoc
+        val title = bdoc.selectFirst("meta[property=og:title]")?.attr("content")?.substringBefore(" - ")?.substringBefore(" | ")?.trim()
+            ?.ifBlank { null } ?: bdoc.selectFirst("h1")?.text().orEmpty()
+        val summary = bdoc.selectFirst("meta[property=og:description]")?.attr("content")
+            ?: bdoc.selectFirst("meta[name=description]")?.attr("content").orEmpty()
+        val author = bdoc.selectFirst("meta[property=og:novel:author],meta[name=author]")?.attr("content")
+            ?: bdoc.selectFirst("a[href*=/profile/]")?.text().orEmpty()
+        val category = bdoc.selectFirst("meta[property=og:novel:category]")?.attr("content").orEmpty()
+        return Fic(
+            id = Fic.makeId(site, storyId), site = site, storyId = storyId, url = book, title = title.ifBlank { "Fic WebNovel" },
+            author = author, fandoms = listOfNotNull(category.takeIf { it.isNotBlank() }), summary = summary,
+            chapterCount = chapters.size, chapters = chapters,
+            cover = "https://book-pic.webnovel.com/bookcover/$storyId?imageMogr2/thumbnail/300"
+        )
+    }
+
+    private suspend fun fetchInfoApi(storyId: String): Fic {
         val token = ensureToken(storyId)
         val book = storyUrl(storyId)
         // Informations du livre
@@ -85,7 +131,7 @@ object WebNovel : Source {
             published = normTime(pub), updated = normTime(upd), views = views, favs = collections,
             cover = "https://book-pic.webnovel.com/bookcover/$storyId?imageMogr2/thumbnail/300"
         )
-        if (title.isBlank()) {
+        if (title.isBlank()) runCatching {
             // secours : on lit la page du livre
             val page = Fetcher.get(book, needsJs = true, readyJs = "!!document.querySelector('h1,meta[property=\"og:title\"]')")
             val doc = Jsoup.parse(page.body, BASE)
@@ -104,8 +150,8 @@ object WebNovel : Source {
     override suspend fun fetchChapter(fic: Fic, index: Int): String {
         val ch = fic.chapters.getOrNull(index) ?: throw IOException("Chapitre inconnu.")
         if (ch.locked) throw IOException("Chapitre verrouillé sur WebNovel : débloquez-le sur le site d'abord.")
-        val token = ensureToken(fic.storyId)
         val api = runCatching {
+            val token = ensureToken(fic.storyId)
             val j = JSONObject(Fetcher.getJson("$BASE/go/pcm/chapter/getContent?_csrfToken=$token&bookId=${fic.storyId}&chapterId=${ch.key}", ch.url))
             val info = j.optJSONObject("data")?.optJSONObject("chapterInfo")
             val parts = info?.optJSONArray("contents")

@@ -128,7 +128,20 @@ object LinkFlow {
                 Fetcher.verificationDone(url)
                 val r = runCatching { withTimeout(30_000) { LinkOpener.open(url, shelf) } }
                 working = false
-                r.onSuccess { o -> finish(o.fic.id, o.chapter, read, download, o.fic.title) }
+                r.onSuccess { o ->
+                    // WebNovel : le chapitre affiché est gardé tel quel (pas besoin de le redemander au site)
+                    if (o.fic.site == Site.WN && html.isNotEmpty() && !Library.hasChapter(o.fic.id, o.chapter)) runCatching {
+                        withContext(Dispatchers.Default) {
+                            val doc = Jsoup.parse(html, url)
+                            val el = doc.selectFirst(".cha-words") ?: doc.selectFirst(".cha-content") ?: doc.selectFirst(".chapter_content")
+                            if (el != null && el.text().length > 200) {
+                                el.select(".para-comment, .j_open_para_comment, .cha-bts, script, style").remove()
+                                Library.writeChapter(o.fic.id, o.chapter, Cleaner.clean(el))
+                            }
+                        }
+                    }
+                    finish(o.fic.id, o.chapter, read, download, o.fic.title)
+                }
                     .onFailure { e ->
                         Toast.show("Ohara n'a pas pu lire cette fic : " + when (e) {
                             is TimeoutCancellationException -> "le site ne répond pas. Réessayez dans un instant."
