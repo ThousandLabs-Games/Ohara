@@ -77,10 +77,16 @@ object Fetcher {
         val lock = hostLocks.getOrPut(h) { Mutex() }
         return lock.withLock {
             politeWait(h)
-            val page = withContext(Dispatchers.IO) { Http.get(url, referer, accept = "application/json, text/plain, */*") }
-            if (Http.isChallenge(page)) throw VerificationNeeded(referer ?: url)
-            if (page.code >= 400) throw SiteError(page.code, url)
-            page.body
+            if ((browserOnlyUntil[h] ?: 0L) <= System.currentTimeMillis()) {
+                val page = withContext(Dispatchers.IO) { Http.get(url, referer, accept = "application/json, text/plain, */*") }
+                if (!Http.isChallenge(page) && page.code != 403) {
+                    if (page.code >= 400) throw SiteError(page.code, url)
+                    return@withLock page.body
+                }
+                browserOnlyUntil[h] = System.currentTimeMillis() + 15 * 60_000L
+            }
+            // requête refusée hors navigateur : on l'envoie depuis une page du site
+            ApiBrowser.fetch(url, referer ?: "https://${host(url)}/")
         }
     }
 

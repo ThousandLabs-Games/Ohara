@@ -28,6 +28,7 @@ sealed class Screen {
     data object WhatsNew : Screen()
     data object Hidden : Screen()
     data object Duplicates : Screen()
+    data object HistoryScreen : Screen()
     data class Settings(val section: String) : Screen()
 }
 

@@ -113,7 +113,7 @@ object Http {
         if (page.code == 429) return true
         if (page.code == 403 || page.code == 503) {
             val b = page.body.take(30000)
-            if (b.contains("cf-chl") || b.contains("challenge-platform") || b.contains("Just a moment") ||
+            if (b.contains("cf-chl") || b.contains("Just a moment") ||
                 b.contains("cf_chl_opt") || b.contains("Attention Required") || b.contains("cf-turnstile") ||
                 b.contains("Checking your browser") || b.contains("DDoS protection")
             ) return true
@@ -122,8 +122,12 @@ object Http {
     }
 
     fun isChallengeHtml(body: String): Boolean {
-        val head = body.take(6000)
-        return head.contains("<title>Just a moment") || head.contains("challenge-platform") ||
-            head.contains("cf-turnstile") || head.contains("<title>Attention Required")
+        // Attention : Cloudflare ajoute un script « challenge-platform » à des pages tout à fait normales.
+        // Seules les vraies pages d'attente comptent.
+        val head = body.take(8000)
+        if (head.contains("<title>Just a moment") || head.contains("<title>Attention Required") ||
+            head.contains("window._cf_chl_opt") || head.contains("id=\"challenge-form\"") || head.contains("id=\"challenge-running\"")
+        ) return true
+        return body.length < 25000 && body.contains("cf-turnstile") && (body.contains("challenge") || body.contains("Verify you are human"))
     }
 }

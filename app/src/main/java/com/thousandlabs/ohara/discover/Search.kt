@@ -344,7 +344,7 @@ object Search {
         if (q.newOnly && f.published <= 0 && f.updated > 0 && now - f.updated > 30 * DAY) return false
         if (q.updatedWithinDays > 0 && f.updated > 0 && now - f.updated > q.updatedWithinDays * DAY) return false
         if (q.publishedFromYear > 0 && f.published > 0 && yearOf(f.published) < q.publishedFromYear) return false
-        if (q.promisingOnly && Scoring.score(f, now) < 62) return false
+        if (q.promisingOnly && !Scoring.isPromising(Scoring.score(f, now))) return false
         return true
     }
 

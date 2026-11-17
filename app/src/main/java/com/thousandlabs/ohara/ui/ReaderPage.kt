@@ -13,7 +13,7 @@ object ReaderPage {
     }
 
     val THEMES = listOf(
-        Theme("Clair", "#FBFAF7", "#1E1E1C", "#8A8A85", "rgba(255,206,84,0.55)"),
+        Theme("Clair", "#FFFFFF", "#222222", "#8A8A85", "rgba(255,206,84,0.55)"),
         Theme("Sépia", "#F4ECD8", "#4A3B28", "#9A8A70", "rgba(230,170,60,0.45)"),
         Theme("Sombre", "#1E1F1E", "#D8D6D0", "#7C7C78", "rgba(190,150,40,0.45)"),
         Theme("Noir", "#000000", "#BDBDBD", "#5E5E5E", "rgba(160,125,30,0.5)")

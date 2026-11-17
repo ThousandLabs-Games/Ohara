@@ -40,6 +40,8 @@ import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.FilterAlt
 import androidx.compose.material.icons.outlined.Fingerprint
 import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.History
+import androidx.compose.material.icons.automirrored.outlined.TrendingUp
 import androidx.compose.material.icons.outlined.NewReleases
 import androidx.compose.material.icons.outlined.Palette
 import androidx.compose.material.icons.outlined.Public
@@ -123,12 +125,14 @@ fun SettingsTab() {
             SettingRow("Filtre anti-déchets", "Harem, fics « react », fics chinoises récentes, genres et auteurs", Icons.Outlined.FilterAlt, onClick = { Nav.push(Screen.Settings("filtre")) })
             SettingRow("Fics masquées", "Dossier « Masquées » et liste blanche", Icons.Outlined.VisibilityOff, onClick = { Nav.push(Screen.Hidden) })
             SettingRow("Passages masqués", "Promos Patreon, notes d'auteur, règles personnelles", Icons.Outlined.Block, onClick = { Nav.push(Screen.Settings("masquage")) })
+            SettingRow("Score « Prometteuse »", "Voir et régler les critères", Icons.AutoMirrored.Outlined.TrendingUp, onClick = { Nav.push(Screen.Settings("score")) })
             SectionTitle("Bibliothèque")
             SettingRow("Téléchargements et nouveaux chapitres", "Vitesse, vérification quotidienne, Pack Claude", Icons.Outlined.Download, onClick = { Nav.push(Screen.Settings("telechargement")) })
             SettingRow("Sauvegarde et restauration", "Toute la bibliothèque dans un seul fichier", Icons.Outlined.Backup, onClick = { Nav.push(Screen.Settings("sauvegarde")) })
             SettingRow("Statistiques de lecture", null, Icons.Outlined.BarChart, onClick = { Nav.push(Screen.Stats) })
             SettingRow("Sites ajoutés", "${Fmt.plural(GenericSource.domains().size, "site")} en plus des trois sites principaux", Icons.Outlined.AddLink, onClick = { Nav.push(Screen.Settings("sources")) })
             SectionTitle("Confidentialité")
+            SettingRow("Historique", if (com.thousandlabs.ohara.data.History.enabled) "Activé" else "Désactivé", Icons.Outlined.History, onClick = { Nav.push(Screen.HistoryScreen) })
             SettingRow("Bloqueur et anti-pistage", "${Fmt.number(AdBlocker.totalBlocked)} éléments bloqués depuis l'installation", Icons.Outlined.Shield, onClick = { Nav.push(Screen.Settings("confidentialite")) })
             if (Prefs.advancedUnlocked) SettingRow("Navigation libre", if (Prefs.advancedBrowsing) "Activée" else "Désactivée", Icons.Outlined.Public, onClick = { Nav.push(Screen.Settings("avance")) })
             SectionTitle("Aide")
@@ -157,7 +161,7 @@ fun SettingsDetailScreen(section: String) {
     val title = when (section) {
         "apparence" -> "Apparence"; "lecture" -> "Lecteur"; "filtre" -> "Filtre anti-déchets"; "masquage" -> "Passages masqués"
         "telechargement" -> "Téléchargements"; "confidentialite" -> "Bloqueur et anti-pistage"; "sauvegarde" -> "Sauvegarde"
-        "sources" -> "Sites ajoutés"; "maj" -> "Mises à jour"; "avance" -> "Navigation libre"; else -> "Réglages"
+        "sources" -> "Sites ajoutés"; "maj" -> "Mises à jour"; "avance" -> "Navigation libre"; "score" -> "Score « Prometteuse »"; else -> "Réglages"
     }
     Scaffold(topBar = { BackTopBar(title) }) { pad ->
         Column(Modifier.fillMaxSize().padding(pad).verticalScroll(rememberScrollState()).padding(bottom = 48.dp)) {
@@ -172,6 +176,7 @@ fun SettingsDetailScreen(section: String) {
                 "sources" -> SourcesSection()
                 "maj" -> UpdateSection()
                 "avance" -> AdvancedSection()
+                "score" -> ScoreSection()
             }
         }
     }
@@ -336,6 +341,9 @@ private fun PrivacySection() {
     TextButton(onClick = { Privacy.clearBrowsingData(context.applicationContext); Toast.show("Données de navigation effacées.") }, modifier = Modifier.padding(horizontal = 8.dp)) {
         Text("Effacer maintenant les données de navigation")
     }
+    SectionTitle("Historique")
+    SwitchRow("Garder un historique", "Pages visitées, recherches et fics ouvertes, sur le téléphone seulement", com.thousandlabs.ohara.data.History.enabled, Icons.Outlined.History) { com.thousandlabs.ohara.data.History.enabled = it }
+    SettingRow("Ouvrir l'historique", null, onClick = { Nav.push(Screen.HistoryScreen) })
     SectionTitle("Verrouillage")
     SwitchRow("Verrouiller Ohara par empreinte", "Demandée à l'ouverture et après 30 secondes en arrière-plan", Prefs.appLock, Icons.Outlined.Fingerprint) { on ->
         if (on) (context as? MainActivity)?.authenticate { Prefs.appLock = true } else Prefs.appLock = false
@@ -476,3 +484,38 @@ private fun AdvancedSection() {
 
 @Suppress("unused")
 private val shape = RoundedCornerShape(8.dp)
+
+@Composable
+private fun ScoreSection() {
+    val sc = com.thousandlabs.ohara.discover.Scoring
+    NoteCard("Le score va de 0 à 100. Il additionne quatre critères. Chaque site est comparé à lui-même : 100 favoris sur FanFiction.net ne valent pas 100 vues sur WebNovel.")
+    SectionTitle("1. Intérêt des lecteurs")
+    Text("FanFiction.net : favoris et abonnés par mois depuis la publication, favoris pour 10 000 mots, avis par chapitre.\n" +
+        "SpaceBattles : vues par mois, réponses et « likes » par chapitre.\n" +
+        "WebNovel : vues et ajouts en bibliothèque par mois.\n" +
+        "Le résultat passe sur une courbe de 0 à 100, puis compte pour la part choisie ci-dessous.",
+        Modifier.padding(horizontal = 16.dp), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    SliderRow("Part de l'intérêt", sc.wInterest.toFloat(), 40f..100f, 11, { "${it.toInt()} %" }) { sc.wInterest = it.toInt() }
+    SectionTitle("2. Longueur")
+    Text("De +8 points pour une très longue fic à −18 pour un texte très court.", Modifier.padding(horizontal = 16.dp),
+        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    SliderRow("Importance", sc.wLength.toFloat(), 0f..200f, 7, { "${it.toInt()} %" }) { sc.wLength = it.toInt() }
+    SliderRow("Pénalité en dessous de", sc.minKWords.toFloat(), 0f..60f, 11, { "${it.toInt()} k mots" }) { sc.minKWords = it.toInt() }
+    SliderRow("Bonus maximal dès", sc.bigKWords.toFloat(), 20f..400f, 18, { "${it.toInt()} k mots" }) { sc.bigKWords = it.toInt() }
+    SectionTitle("3. Activité")
+    Text("Terminée ou mise à jour ce mois-ci : +6. Mise à jour depuis moins de 4 mois : +2. Plus ancienne : −3, puis −12 une fois « inactive » (délai réglé dans Téléchargements, actuellement ${com.thousandlabs.ohara.data.Prefs.inactiveMonths} mois).",
+        Modifier.padding(horizontal = 16.dp), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    SliderRow("Importance", sc.wActivity.toFloat(), 0f..200f, 7, { "${it.toInt()} %" }) { sc.wActivity = it.toInt() }
+    SectionTitle("4. Démarrage fort")
+    Text("Une fic récente qui attire déjà beaucoup de lecteurs (intérêt d'au moins 60) gagne +6.", Modifier.padding(horizontal = 16.dp),
+        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    SliderRow("Importance", sc.wRising.toFloat(), 0f..200f, 7, { "${it.toInt()} %" }) { sc.wRising = it.toInt() }
+    SliderRow("Fic « récente » jusqu'à", sc.risingDays.toFloat(), 15f..365f, 0, { "${it.toInt()} jours" }) { sc.risingDays = it.toInt() }
+    SectionTitle("Seuils")
+    SliderRow("« Prometteuse » à partir de", sc.threshold.toFloat(), 30f..95f, 0, { "${it.toInt()}" }) { sc.threshold = it.toInt(); if (sc.veryThreshold <= it.toInt()) sc.veryThreshold = (it.toInt() + 1).coerceAtMost(100) }
+    SliderRow("« Très prometteuse » à partir de", sc.veryThreshold.toFloat(), 31f..100f, 0, { "${it.toInt()}" }) { sc.veryThreshold = it.toInt().coerceAtLeast(sc.threshold + 1) }
+    Spacer(Modifier.height(8.dp))
+    TextButton(onClick = { sc.reset(); Toast.show("Valeurs d'origine rétablies.") }, modifier = Modifier.padding(horizontal = 8.dp)) { Text("Rétablir les valeurs d'origine") }
+    Text("Sur la fiche d'une fic, touchez la ligne « Score » pour voir le détail du calcul.", Modifier.padding(horizontal = 16.dp),
+        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+}

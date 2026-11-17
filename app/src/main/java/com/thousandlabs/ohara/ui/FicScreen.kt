@@ -171,13 +171,19 @@ fun FicScreen(ficId: String, preview: Fic?) {
         LazyColumn(Modifier.fillMaxSize().padding(pad), contentPadding = ListPadding) {
             item {
                 Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
-                    Text(fic.title, style = MaterialTheme.typography.headlineSmall)
-                    if (fic.author.isNotBlank()) Text("par ${fic.author}" + when {
-                        JunkFilter.isTrusted(fic) -> " · auteur de confiance"
-                        JunkFilter.isBlocked(fic) -> " · auteur bloqué"
-                        else -> ""
-                    }, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Text(fic.fandomLabel, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
+                    Row {
+                        CoverTile(fic, 76.dp)
+                        Spacer(Modifier.width(16.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(fic.title, style = MaterialTheme.typography.headlineSmall)
+                            if (fic.author.isNotBlank()) Text("par ${fic.author}" + when {
+                                JunkFilter.isTrusted(fic) -> " · auteur de confiance"
+                                JunkFilter.isBlocked(fic) -> " · auteur bloqué"
+                                else -> ""
+                            }, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(fic.fandomLabel, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
+                        }
+                    }
                     Spacer(Modifier.height(8.dp))
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         SitePill(fic.site)
@@ -243,7 +249,7 @@ fun FicScreen(ficId: String, preview: Fic?) {
                         if (fic.views > 0 || fic.replies > 0) add("Audience" to listOfNotNull(
                             fic.views.takeIf { it > 0 }?.let { "${Fmt.number(it.toLong())} vues" },
                             fic.replies.takeIf { it > 0 }?.let { "${Fmt.number(it.toLong())} réponses" }).joinToString(" · "))
-                        add("Score « Prometteuse »" to "${detail.score}/100" + if (detail.reasons.isNotEmpty()) " — " + detail.reasons.joinToString(", ").lowercase() else "")
+                        add("Score" to "${detail.score}/100 — " + detail.parts.joinToString(" · ") { (k, v) -> "$k ${if (v >= 0) "+" else ""}$v" } + " (toucher pour les critères)")
                         if (fic.rating.isNotBlank()) add("Classement" to fic.rating)
                         if (fic.language.isNotBlank()) add("Langue" to fic.language)
                         if (fic.genres.isNotEmpty()) add("Genres" to fic.genres.joinToString(", "))
@@ -252,7 +258,7 @@ fun FicScreen(ficId: String, preview: Fic?) {
                         if (fic.altUrls.isNotEmpty()) add("Autres adresses" to fic.altUrls.joinToString("\n"))
                     }
                     rows.forEach { (k, v) ->
-                        Row(Modifier.padding(vertical = 3.dp)) {
+                        Row(Modifier.padding(vertical = 3.dp).then(if (k == "Score") Modifier.clickable { Nav.push(Screen.Settings("score")) } else Modifier)) {
                             Text(k, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.width(118.dp))
                             Text(v, style = MaterialTheme.typography.bodySmall)
                         }

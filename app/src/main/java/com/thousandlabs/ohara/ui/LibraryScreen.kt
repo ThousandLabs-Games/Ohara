@@ -1,5 +1,6 @@
 package com.thousandlabs.ohara.ui
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -276,7 +277,10 @@ fun LibraryTab() {
             } else if (shown.isEmpty()) {
                 EmptyState(Icons.Outlined.Search, "Aucune fic ici", "Changez d'étagère ou de filtre.")
             } else {
+                val resume = if (shelf.isEmpty() && query.isBlank() && !onlyNew && selection.isEmpty())
+                    fics.filter { it.lastOpened > 0 && Shelves.DONE !in it.shelves && Shelves.ABANDONED !in it.shelves }.maxByOrNull { it.lastOpened } else null
                 LazyColumn(Modifier.fillMaxSize(), contentPadding = ListPadding) {
+                    if (resume != null) item(key = "reprendre") { ResumeCard(resume) }
                     items(shown, key = { it.id }) { f ->
                         FicRow(
                             f, showProgress = true, selected = f.id in selection,
@@ -404,3 +408,34 @@ fun DownloadsScreen() {
 
 /** Petit utilitaire : score d'une fic de la bibliothèque (pour l'afficher sur la fiche). */
 fun libraryScore(f: Fic) = Scoring.score(f)
+
+/** Carte « Reprendre la lecture » en haut de la bibliothèque. */
+@Composable
+private fun ResumeCard(f: Fic) {
+    val cs = MaterialTheme.colorScheme
+    androidx.compose.material3.Surface(
+        color = cs.primaryContainer, shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)
+    ) {
+        Row(Modifier.clickable { Nav.push(Screen.Reader(f.id, null)) }.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+            CoverTile(f, 56.dp)
+            Spacer(Modifier.width(14.dp))
+            Column(Modifier.weight(1f)) {
+                Text("Reprendre la lecture", style = MaterialTheme.typography.labelMedium, color = cs.primary)
+                Text(f.title, style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, color = cs.onPrimaryContainer)
+                val total = f.totalChapters
+                Text("Chapitre ${f.progressChapter + 1}" + (if (total > 0) " sur $total" else "") + " · ouverte ${Fmt.relative(f.lastOpened)}",
+                    style = MaterialTheme.typography.bodySmall, color = cs.onPrimaryContainer.copy(alpha = 0.75f))
+                if (total > 0) {
+                    Spacer(Modifier.height(6.dp))
+                    LinearProgressIndicator(progress = { ((f.maxChapterRead + 1).coerceAtLeast(f.progressChapter)).toFloat() / total },
+                        modifier = Modifier.fillMaxWidth().height(4.dp), color = cs.primary, trackColor = cs.surface.copy(alpha = 0.6f))
+                }
+            }
+            Spacer(Modifier.width(10.dp))
+            androidx.compose.material3.FilledIconButton(onClick = { Nav.push(Screen.Reader(f.id, null)) }) {
+                Icon(Icons.Outlined.PlayArrow, "Reprendre")
+            }
+        }
+    }
+}

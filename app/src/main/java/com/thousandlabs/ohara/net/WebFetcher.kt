@@ -71,7 +71,7 @@ object WebFetcher {
         poll = Runnable {
             if (finished) return@Runnable
             val probe = "(function(){try{var t=document.title||'';var h=document.documentElement?document.documentElement.innerHTML.length:0;" +
-                "var c=(t.indexOf('Just a moment')>=0||!!document.querySelector('#challenge-form,#cf-challenge-running,.cf-turnstile,#turnstile-wrapper'));" +
+                "var c=(t.indexOf('Just a moment')>=0||!!document.querySelector('#challenge-form,#challenge-running,#cf-challenge-running'));" +
                 "var r=" + (readyJs ?: "true") + ";return (c?'C':'-')+(r?'R':'-')+h;}catch(e){return '--0';}})()"
             web.evaluateJavascript(probe) { raw ->
                 if (finished) return@evaluateJavascript

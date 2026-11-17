@@ -368,7 +368,7 @@ private fun SearchForm() {
 
         SectionTitle("Options")
         SwitchRow("Nouveautés seulement", "Publiées ces 30 derniers jours", newOnly) { newOnly = it }
-        SwitchRow("Prometteuses seulement", "Score « Prometteuse » d'au moins 62/100", promising) { promising = it }
+        SwitchRow("Prometteuses seulement", "Score « Prometteuse » d'au moins ${com.thousandlabs.ohara.discover.Scoring.threshold}/100", promising) { promising = it }
         SwitchRow("En anglais seulement", "Filtre de langue de FanFiction.net", english) { english = it }
         SectionTitle("Tri")
         FlowRow(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -396,7 +396,12 @@ fun ResultsScreen(query: SearchQuery) {
     val st by Search.state.collectAsState()
     var sortMenu by remember { mutableStateOf(false) }
     var sort by remember { mutableStateOf(query.sort) }
-    LaunchedEffect(query) { if (st.query != query) Search.start(query) }
+    LaunchedEffect(query) {
+        if (st.query != query) {
+            Search.start(query)
+            com.thousandlabs.ohara.data.History.add(com.thousandlabs.ohara.data.History.Kind.SEARCH, query.describe(), "q:" + query.toJson())
+        }
+    }
     val list = remember(st.hits, sort) { Search.sort(st.hits, sort) }
     val listState = rememberLazyListState()
     val nearEnd by remember { derivedStateOf { listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0 >= listState.layoutInfo.totalItemsCount - 4 } }

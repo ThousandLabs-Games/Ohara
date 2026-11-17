@@ -278,7 +278,7 @@ object Discover {
                 runCatching { Search.collect(q, 2, notes).forEach { cands.putIfAbsent(it.id, it) } }
             }
             val now = System.currentTimeMillis()
-            val items = rank(cands.values, p, now, 100).sortedWith(compareByDescending<Rec> { it.promising >= 62 }.thenByDescending { it.fic.published })
+            val items = rank(cands.values, p, now, 100).sortedWith(compareByDescending<Rec> { Scoring.isPromising(it.promising) }.thenByDescending { it.fic.published })
             val s = State(items = items, updatedAt = now, notes = notes,
                 message = if (items.isEmpty()) "Pas de nouveauté retenue pour vos fandoms ces 30 derniers jours." else null)
             _news.value = s

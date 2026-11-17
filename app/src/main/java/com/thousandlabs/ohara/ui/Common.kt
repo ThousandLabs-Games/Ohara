@@ -158,6 +158,32 @@ fun ScorePill(score: Int) {
     Pill(label, color = Color(0xFFB7791F), textColor = Color.White)
 }
 
+private val COVER_COLORS = listOf(
+    Color(0xFF1E5F74) to Color(0xFF133B5C), Color(0xFF7A3E48) to Color(0xFF4A1F2B), Color(0xFF2E6B4F) to Color(0xFF173F2C),
+    Color(0xFF6B4E9B) to Color(0xFF3D2B63), Color(0xFF9B6A2E) to Color(0xFF5E3D15), Color(0xFF34558B) to Color(0xFF1D3157),
+    Color(0xFF8A3B2E) to Color(0xFF52201A), Color(0xFF3E6F7A) to Color(0xFF223F47), Color(0xFF5A6B2E) to Color(0xFF333E17)
+)
+
+/** Couverture dessinée : couleur du fandom, initiales du titre, site. Les sites de fics n'ont presque jamais de vraie couverture. */
+@Composable
+fun CoverTile(fic: Fic, width: androidx.compose.ui.unit.Dp = 48.dp) {
+    val key = fic.fandoms.firstOrNull() ?: fic.title
+    val (c1, c2) = COVER_COLORS[(key.lowercase().hashCode() and 0x7fffffff) % COVER_COLORS.size]
+    val initials = fic.title.split(Regex("[^\\p{L}\\p{N}]+")).filter { it.isNotEmpty() && it.lowercase() !in setOf("the", "a", "of", "an", "and", "le", "la", "les", "de", "in") }
+        .take(2).joinToString("") { it.take(1).uppercase() }.ifEmpty { "?" }
+    val h = width * 1.42f
+    Box(
+        Modifier.width(width).height(h).clip(RoundedCornerShape(6.dp))
+            .background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(c1, c2)))
+    ) {
+        Text(initials, modifier = Modifier.align(Alignment.Center), color = Color.White.copy(alpha = 0.92f),
+            fontSize = (width.value * 0.36f).sp, fontWeight = FontWeight.SemiBold, fontFamily = androidx.compose.ui.text.font.FontFamily.Serif)
+        Text(fic.site.short, modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 3.dp), color = Color.White.copy(alpha = 0.7f),
+            fontSize = (width.value * 0.17f).sp, fontWeight = FontWeight.Medium)
+        Box(Modifier.align(Alignment.CenterStart).width(3.dp).height(h).background(Color.Black.copy(alpha = 0.18f)))
+    }
+}
+
 /** Une fic dans une liste (bibliothèque, recherche, propositions). */
 @OptIn(ExperimentalFoundationApi::class, ExperimentalLayoutApi::class)
 @Composable
@@ -181,6 +207,8 @@ fun FicRow(
             .combinedClickable(onClick = onClick, onLongClick = onLongClick)
             .padding(horizontal = 16.dp, vertical = 12.dp)
     ) {
+        CoverTile(fic)
+        Spacer(Modifier.width(14.dp))
         Column(Modifier.weight(1f)) {
             Text(fic.title.ifBlank { "Sans titre" }, style = MaterialTheme.typography.titleMedium.copy(fontSize = 16.sp),
                 maxLines = 2, overflow = TextOverflow.Ellipsis)

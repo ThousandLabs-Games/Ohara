@@ -32,6 +32,8 @@ object Prefs {
     fun getString(key: String, def: String) = sp.getString(key, def) ?: def
     fun putString(key: String, v: String) { sp.edit().putString(key, v).apply(); bump() }
 
+    fun remove(key: String) { sp.edit().remove(key).apply(); bump() }
+
     fun getList(key: String): List<String> = runCatching {
         val a = JSONArray(sp.getString(key, "[]"))
         List(a.length()) { a.getString(it) }
@@ -64,12 +66,12 @@ object Prefs {
     var accent: Int get() = getInt("accent", 0); set(v) = putInt("accent", v)
 
     // Lecture
-    var readerFont: Int get() = getInt("r_font", 0); set(v) = putInt("r_font", v)
-    var readerSize: Int get() = getInt("r_size", 18); set(v) = putInt("r_size", v)
-    var readerLine: Float get() = getFloat("r_line", 1.6f); set(v) = putFloat("r_line", v)
-    var readerMargin: Int get() = getInt("r_margin", 20); set(v) = putInt("r_margin", v)
+    var readerFont: Int get() = getInt("r_font", 1); set(v) = putInt("r_font", v)
+    var readerSize: Int get() = getInt("r_size", 17); set(v) = putInt("r_size", v)
+    var readerLine: Float get() = getFloat("r_line", 1.5f); set(v) = putFloat("r_line", v)
+    var readerMargin: Int get() = getInt("r_margin", 16); set(v) = putInt("r_margin", v)
     var readerTheme: Int get() = getInt("r_theme", 0); set(v) = putInt("r_theme", v)
-    var readerJustify: Boolean get() = getBool("r_justify", true); set(v) = putBool("r_justify", v)
+    var readerJustify: Boolean get() = getBool("r_justify", false); set(v) = putBool("r_justify", v)
     var readerContinuous: Boolean get() = getBool("r_cont", false); set(v) = putBool("r_cont", v)
     var keepScreenOn: Boolean get() = getBool("r_awake", true); set(v) = putBool("r_awake", v)
     var volumeKeys: Boolean get() = getBool("r_volume", false); set(v) = putBool("r_volume", v)

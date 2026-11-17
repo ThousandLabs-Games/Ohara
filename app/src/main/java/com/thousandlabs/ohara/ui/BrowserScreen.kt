@@ -40,6 +40,7 @@ import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.ContentPaste
 import androidx.compose.material.icons.outlined.DeleteSweep
 import androidx.compose.material.icons.outlined.Download
+import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.LibraryAdd
 import androidx.compose.material.icons.outlined.Lock
@@ -58,6 +59,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -142,6 +144,7 @@ object BrowserHolder {
                 SEARCH_ENGINES.getOrElse(Prefs.searchEngine) { SEARCH_ENGINES[0] }.second + URLEncoder.encode(t, "UTF-8")
             else -> "https://www.fanfiction.net/search/?keywords=${URLEncoder.encode(t, "UTF-8")}&ready=1&type=story"
         }
+        if (!t.startsWith("http") && url.contains(URLEncoder.encode(t, "UTF-8"))) com.thousandlabs.ohara.data.History.add(com.thousandlabs.ohara.data.History.Kind.SEARCH, t, url)
         val clean = Privacy.upgrade(Privacy.cleanUrl(url))
         val host = runCatching { java.net.URI(clean).host }.getOrNull()
         if (!allowedHost(host)) {
@@ -230,6 +233,7 @@ hide:function(s){try{document.querySelectorAll(s).forEach(function(x){x.style.se
             private val main = Handler(Looper.getMainLooper())
             @JavascriptInterface fun picked(selector: String, text: String, count: Int) { main.post { picked = Triple(selector, text, count) } }
         }, "OharaPick")
+        PageTranslator.attach(w)
         w.webChromeClient = object : WebChromeClient() {
             override fun onProgressChanged(view: WebView, newProgress: Int) { progress = newProgress }
             override fun onReceivedTitle(view: WebView, t: String?) { title = t.orEmpty() }
@@ -259,16 +263,21 @@ hide:function(s){try{document.querySelectorAll(s).forEach(function(x){x.style.se
                 // redirection du site vers sa version mobile : on repasse sur la version ordinateur
                 if (u != null && Http.isFfn(u) && Http.desktopUrl(u) != u) { view.stopLoading(); load(view, u); return }
                 pageUrl = u; url = u.orEmpty(); AdBlocker.PageStats.blocked = 0; blocked = 0
+                PageTranslator.newPage()
                 picking = false; picked = null
             }
 
             override fun onPageCommitVisible(view: WebView, u: String?) {
                 cosmeticJs(u).takeIf { it.isNotEmpty() }?.let { view.evaluateJavascript(it, null) }
+                if (u != null && PageFit.enabled && Http.needsDesktop(u)) view.evaluateJavascript(PageFit.js, null)
             }
 
             override fun onPageFinished(view: WebView, u: String?) {
                 url = u.orEmpty(); blocked = AdBlocker.PageStats.blocked
                 cosmeticJs(u).takeIf { it.isNotEmpty() }?.let { view.evaluateJavascript(it, null) }
+                if (u != null && PageFit.enabled && Http.needsDesktop(u)) view.evaluateJavascript(PageFit.js, null)
+                PageTranslator.inject(view)
+                if (u != null && u.startsWith("http")) com.thousandlabs.ohara.data.History.add(com.thousandlabs.ohara.data.History.Kind.PAGE, view.title.orEmpty(), u)
                 if (u != null) {
                     if (Sources.resolve(u) != null) view.evaluateJavascript("document.documentElement.outerHTML") { raw ->
                         val html = runCatching { JSONArray("[$raw]").getString(0) }.getOrDefault("")
@@ -287,6 +296,9 @@ hide:function(s){try{document.querySelectorAll(s).forEach(function(x){x.style.se
             }
         }
         web = w
+        com.thousandlabs.ohara.net.ApiBrowser.visibleProvider = { host ->
+            web?.takeIf { v -> showWeb && runCatching { java.net.URI(v.url ?: "").host?.lowercase()?.removePrefix("www.")?.removePrefix("m.") == host }.getOrDefault(false) }
+        }
         return w
     }
 }
@@ -346,6 +358,15 @@ fun BrowserTab() {
                             Text("${h.blocked}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
                         }
                     }
+                    if (h.showWeb) {
+                        val on = com.thousandlabs.ohara.translate.Translate.enabled
+                        IconButton(onClick = {
+                            val now = !com.thousandlabs.ohara.translate.Translate.enabled
+                            com.thousandlabs.ohara.translate.Translate.enabled = now
+                            if (now) { PageTranslator.inject(web); Toast.show("Traduction en français activée pour toutes les pages (et dans le lecteur).") }
+                            else { PageTranslator.restore(web); Toast.show("Traduction désactivée : texte original.") }
+                        }) { Icon(Icons.Outlined.Translate, if (on) "Désactiver la traduction" else "Traduire en français", tint = if (on) MaterialTheme.colorScheme.primary else LocalContentColor.current) }
+                    }
                     if (h.showWeb) IconButton(onClick = { if (h.progress < 100) web.stopLoading() else web.reload() }) {
                         Icon(if (h.progress < 100) Icons.Outlined.Close else Icons.Outlined.Refresh, if (h.progress < 100) "Arrêter" else "Recharger")
                     }
@@ -357,6 +378,10 @@ fun BrowserTab() {
                                 if (ficLink != null) DropdownMenuItem(text = { Text("Lire en français dans Ohara") }, leadingIcon = { Icon(Icons.Outlined.Translate, null) }, onClick = {
                                     menu = false; com.thousandlabs.ohara.translate.Translate.enabled = true; LinkFlow.openFromPage(web, h.url)
                                 })
+                                if (Http.needsDesktop(h.url)) DropdownMenuItem(
+                                    text = { Text(if (PageFit.enabled) "Afficher la page d'origine (ordinateur)" else "Adapter la page au téléphone") },
+                                    leadingIcon = { Icon(Icons.Outlined.Public, null) },
+                                    onClick = { menu = false; PageFit.enabled = !PageFit.enabled; web.reload() })
                                 DropdownMenuItem(text = { Text("Masquer un élément") }, leadingIcon = { Icon(Icons.Outlined.TouchApp, null) }, onClick = { menu = false; h.startPicker() })
                                 val on = AdBlocker.enabledOn(h.url)
                                 DropdownMenuItem(text = { Text(if (on) "Désactiver le bloqueur sur ce site" else "Réactiver le bloqueur sur ce site") }, leadingIcon = { Icon(Icons.Outlined.Shield, null) }, onClick = {
@@ -371,6 +396,7 @@ fun BrowserTab() {
                                 if (free && !Privacy.isSourceHost(host) && !GenericSource.matches(host)) DropdownMenuItem(text = { Text("Ajouter ce site comme source de fics") }, leadingIcon = { Icon(Icons.Outlined.AddLink, null) }, onClick = {
                                     menu = false; GenericSource.addDomain(host); Toast.show("$host ajouté : Ohara pourra télécharger ses chapitres.")
                                 })
+                                DropdownMenuItem(text = { Text("Historique") }, leadingIcon = { Icon(Icons.Outlined.History, null) }, onClick = { menu = false; Nav.push(Screen.HistoryScreen) })
                                 DropdownMenuItem(text = { Text("Page d'accueil") }, leadingIcon = { Icon(Icons.Outlined.Home, null) }, onClick = { menu = false; h.showWeb = false })
                             }
                             DropdownMenuItem(text = { Text("Effacer les données de navigation") }, leadingIcon = { Icon(Icons.Outlined.DeleteSweep, null) }, onClick = {
@@ -378,6 +404,9 @@ fun BrowserTab() {
                             })
                         }
                     }
+                }
+                PageTranslator.status?.let { st ->
+                    if (h.showWeb) Text(st, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(start = 16.dp, bottom = 4.dp))
                 }
                 if (h.showWeb && h.progress < 100) LinearProgressIndicator(progress = { h.progress / 100f }, modifier = Modifier.fillMaxWidth().height(2.dp))
                 else HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)

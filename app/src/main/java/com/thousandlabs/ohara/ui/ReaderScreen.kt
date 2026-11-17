@@ -223,6 +223,7 @@ fun ReaderScreen(ficId: String, startChapter: Int?) {
             web.value?.evaluateJavascript("ohara.show($json, $restorePos, ${Prefs.readerContinuous})", null)
             displayCh = requestCh
             Library.update(ficId) { it.copy(progressChapter = requestCh, lastOpened = System.currentTimeMillis()) }
+            com.thousandlabs.ohara.data.History.add(com.thousandlabs.ohara.data.History.Kind.FIC, "${f.title} — chapitre ${requestCh + 1}", "fic:${f.id}#$requestCh")
             loading = false
             // le chapitre suivant est préparé à l'avance (lecture hors connexion)
             val next = requestCh + 1
@@ -477,6 +478,11 @@ fun ReaderSettings() {
     @Suppress("UNUSED_EXPRESSION") pv
     Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 32.dp)) {
         Text("Affichage", style = MaterialTheme.typography.titleLarge)
+        Spacer(Modifier.height(12.dp))
+        androidx.compose.material3.OutlinedButton(onClick = {
+            Prefs.readerFont = 1; Prefs.readerSize = 17; Prefs.readerLine = 1.5f; Prefs.readerMargin = 14
+            Prefs.readerJustify = false; Prefs.readerTheme = 0
+        }, modifier = Modifier.fillMaxWidth()) { Text("Comme sur le site (police simple, texte aligné à gauche)") }
         Spacer(Modifier.height(12.dp))
         Text("Thème", style = MaterialTheme.typography.labelLarge)
         Row(Modifier.padding(vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
