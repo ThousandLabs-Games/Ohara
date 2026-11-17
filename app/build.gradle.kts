@@ -79,4 +79,6 @@ dependencies {
 
     // Lecture des pages des sites (licence MIT)
     implementation("org.jsoup:jsoup:1.18.1")
+    // traduction sur le téléphone (modèle anglais → français téléchargé une seule fois)
+    implementation("com.google.mlkit:translate:17.0.3")
 }

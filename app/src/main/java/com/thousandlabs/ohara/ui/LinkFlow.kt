@@ -85,35 +85,66 @@ object LinkFlow {
     }
 
     /**
-     * Une page de fic vient de s'afficher normalement dans le navigateur (sans vérification en cours).
-     * FanFiction.net : la fiche et le chapitre affiché sont lus directement sur la page, sans nouvelle requête.
+     * Lit la fiche (et le chapitre affiché) directement dans le HTML d'une page déjà ouverte.
+     * FanFiction.net seulement : c'est le site qui bloque la lecture invisible.
+     * @param force ajoute la fic même si elle n'est pas encore dans la bibliothèque.
      */
+    private suspend fun importPage(url: String, html: String, force: Boolean, shelf: String?): Boolean {
+        val (_, info) = Sources.resolve(url) ?: return false
+        if (info.site != Site.FFN || Http.isChallengeHtml(html)) return false
+        return runCatching {
+            withContext(Dispatchers.Default) {
+                val doc = Jsoup.parse(html, url)
+                if (doc.selectFirst("#profile_top") == null) return@withContext false
+                val fic = FanFictionNet.parseStory(doc, info.storyId)
+                if (!force && !Library.contains(fic.id)) return@withContext false
+                val saved = Library.upsert(fic, if (Library.contains(fic.id)) null else (shelf ?: Shelves.READING))
+                val idx = info.chapterIndex ?: 0
+                doc.selectFirst("#storytext")?.let { el -> if (!Library.hasChapter(saved.id, idx)) Library.writeChapter(saved.id, idx, Cleaner.clean(el)) }
+                true
+            }
+        }.getOrDefault(false)
+    }
+
+    /** Boutons du navigateur (« Ajouter », « Lire dans Ohara », « Télécharger ») : la fic est lue sur la page affichée. */
+    fun openFromPage(web: android.webkit.WebView, url: String, shelf: String = Shelves.READING, read: Boolean = true, download: Boolean = false) {
+        if (working) { Toast.show("Un instant, Ohara termine l'opération en cours…"); return }
+        working = true
+        Toast.show(when { read -> "Ouverture dans Ohara…"; download -> "Préparation du téléchargement…"; else -> "Ajout à la bibliothèque…" })
+        web.evaluateJavascript("document.documentElement.outerHTML") { raw ->
+            val html = runCatching { org.json.JSONArray("[$raw]").getString(0) }.getOrDefault("")
+            AppScope.launch {
+                if (html.isNotEmpty()) importPage(url, html, force = true, shelf = shelf)
+                Fetcher.verificationDone(url)
+                val r = runCatching { withTimeout(30_000) { LinkOpener.open(url, shelf) } }
+                working = false
+                r.onSuccess { o -> finish(o.fic.id, o.chapter, read, download, o.fic.title) }
+                    .onFailure { e ->
+                        Toast.show("Ohara n'a pas pu lire cette fic : " + when (e) {
+                            is TimeoutCancellationException -> "le site ne répond pas. Réessayez dans un instant."
+                            else -> e.message ?: "erreur inconnue."
+                        })
+                    }
+            }
+        }
+    }
+
+    /** Une page de fic vient de s'afficher normalement dans le navigateur. */
     fun onBrowserPage(url: String, html: String) {
         val (_, info) = Sources.resolve(url) ?: return
-        Fetcher.verificationDone(url)
         if (Http.isChallengeHtml(html)) return
+        Fetcher.verificationDone(url)
         val p = pending
         AppScope.launch {
-            if (info.site == Site.FFN) runCatching {
-                withContext(Dispatchers.Default) {
-                    val doc = Jsoup.parse(html, url)
-                    if (doc.selectFirst("#profile_top") == null) return@withContext
-                    val fic = FanFictionNet.parseStory(doc, info.storyId)
-                    val known = Library.contains(fic.id)
-                    val chapterPage = info.chapterIndex != null
-                    if (known || p?.ficId == fic.id || (chapterPage && com.thousandlabs.ohara.data.Prefs.autoAddVisited)) {
-                        val saved = Library.upsert(fic, if (known) null else (p?.shelf ?: Shelves.READING))
-                        val idx = info.chapterIndex ?: 0
-                        doc.selectFirst("#storytext")?.let { el -> if (!Library.hasChapter(saved.id, idx)) Library.writeChapter(saved.id, idx, Cleaner.clean(el)) }
-                    }
-                }
-            }
+            val autoAdd = info.chapterIndex != null && com.thousandlabs.ohara.data.Prefs.autoAddVisited
+            importPage(url, html, force = p?.ficId == info.ficId || autoAdd, shelf = p?.shelf)
             if (p != null && p.ficId == info.ficId) {
                 pending = null
                 BrowserHolder.verifying = false
+                working = true
                 runCatching { withTimeout(30_000) { LinkOpener.open(url, p.shelf) } }
-                    .onSuccess { o -> finish(o.fic.id, o.chapter, p.read, p.download, o.fic.title) }
-                    .onFailure { e -> Toast.show("La page est ouverte, mais Ohara n'a pas pu lire la fic : ${e.message ?: "erreur"}. Touchez « Lire dans Ohara » pour réessayer.") }
+                    .onSuccess { o -> working = false; finish(o.fic.id, o.chapter, p.read, p.download, o.fic.title) }
+                    .onFailure { e -> working = false; Toast.show("La page est ouverte, mais Ohara n'a pas pu lire la fic : ${e.message ?: "erreur"}. Touchez « Lire dans Ohara » pour réessayer.") }
             } else if (p == null) BrowserHolder.maybeAutoAdd(url)
         }
     }

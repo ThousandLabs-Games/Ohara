@@ -47,6 +47,7 @@ import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.NoteAdd
 import androidx.compose.material.icons.outlined.Public
 import androidx.compose.material.icons.outlined.TextFields
+import androidx.compose.material.icons.outlined.Translate
 import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -93,6 +94,7 @@ import com.thousandlabs.ohara.data.Shelves
 import com.thousandlabs.ohara.discover.Masking
 import com.thousandlabs.ohara.download.Downloads
 import com.thousandlabs.ohara.net.VerificationNeeded
+import com.thousandlabs.ohara.translate.Translate
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -154,6 +156,8 @@ fun ReaderScreen(ficId: String, startChapter: Int?) {
     val counted = remember { HashSet<Int>() }
     val chapterWords = remember { HashMap<Int, Int>() }
     val web = remember { mutableStateOf<WebView?>(null) }
+    var fr by remember { mutableStateOf(Translate.enabled) }
+    var translating by remember { mutableStateOf<String?>(null) }
     val theme = ReaderPage.theme().also { @Suppress("UNUSED_EXPRESSION") pv }
 
     // ouverture : badges remis à zéro
@@ -187,11 +191,21 @@ fun ReaderScreen(ficId: String, startChapter: Int?) {
     suspend fun sectionJson(f: Fic, idx: Int): JSONObject {
         val raw = Downloads.ensureChapter(f, idx)
         val cur = Library.get(f.id) ?: f
-        val html = withContext(Dispatchers.Default) { Masking.applyToHtml(cur, raw).html }
+        var html = withContext(Dispatchers.Default) { Masking.applyToHtml(cur, raw).html }
         chapterWords[idx] = Library.countWords(raw)
+        var title = cur.chapters.getOrNull(idx)?.title ?: "Chapitre ${idx + 1}"
+        if (fr) {
+            try {
+                html = Translate.chapter(f.id, idx, html) { msg -> translating = msg }
+                title = runCatching { Translate.text(title) }.getOrDefault(title)
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Toast.show("Traduction impossible (${e.message ?: "pas de connexion pour télécharger le modèle"}) : texte original affiché.")
+            } finally { translating = null }
+        }
         val hl = JSONArray()
         cur.highlights.filter { it.chapter == idx }.forEach { hl.put(JSONObject().put("t", it.text).put("n", it.note)) }
-        val title = cur.chapters.getOrNull(idx)?.title ?: "Chapitre ${idx + 1}"
         val total = cur.totalChapters
         return JSONObject().put("ch", idx).put("title", title)
             .put("html", Base64.encodeToString(html.toByteArray(Charsets.UTF_8), Base64.NO_WRAP))
@@ -200,7 +214,7 @@ fun ReaderScreen(ficId: String, startChapter: Int?) {
     }
 
     // chargement du chapitre demandé
-    LaunchedEffect(requestCh, reloadKey, ready) {
+    LaunchedEffect(requestCh, reloadKey, ready, fr) {
         if (!ready) return@LaunchedEffect
         loading = true; error = null; verifyUrl = null
         val f = Library.get(ficId) ?: return@LaunchedEffect
@@ -291,7 +305,10 @@ fun ReaderScreen(ficId: String, startChapter: Int?) {
             web.value?.evaluateJavascript("if(window.ohara)ohara.style($styleJson)", null)
         }
 
-        if (loading) CircularProgressIndicator(Modifier.align(Alignment.Center), color = theme.fgColor.copy(alpha = 0.6f))
+        if (loading) Column(Modifier.align(Alignment.Center).padding(32.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            CircularProgressIndicator(color = theme.fgColor.copy(alpha = 0.6f))
+            translating?.let { Spacer(Modifier.height(12.dp)); Text(it, color = theme.fgColor.copy(alpha = 0.75f), style = MaterialTheme.typography.bodySmall) }
+        }
         error?.let { msg ->
             Column(Modifier.align(Alignment.Center).padding(32.dp).clip(RoundedCornerShape(12.dp))
                 .background(MaterialTheme.colorScheme.surfaceContainerHigh).padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -317,6 +334,12 @@ fun ReaderScreen(ficId: String, startChapter: Int?) {
                         Text(fic.chapters.getOrNull(displayCh)?.title ?: "Chapitre ${displayCh + 1}", style = MaterialTheme.typography.bodySmall,
                             maxLines = 1, overflow = TextOverflow.Ellipsis, color = theme.fgColor.copy(alpha = 0.65f))
                     }
+                    IconButton(onClick = {
+                        fr = !fr; Translate.enabled = fr
+                        restorePos = Library.get(ficId)?.progressPos ?: 0f
+                        requestCh = displayCh
+                        Toast.show(if (fr) "Traduction en français activée (sur le téléphone, sans connexion une fois le modèle téléchargé)." else "Texte original affiché.")
+                    }) { Icon(Icons.Outlined.Translate, if (fr) "Afficher le texte original" else "Traduire en français", tint = if (fr) MaterialTheme.colorScheme.primary else theme.fgColor) }
                     IconButton(onClick = { chapters = true }) { Icon(Icons.AutoMirrored.Outlined.FormatListBulleted, "Chapitres") }
                     IconButton(onClick = { settings = true }) { Icon(Icons.Outlined.TextFields, "Affichage") }
                     IconButton(onClick = { Nav.push(Screen.FicDetail(ficId)) }) { Icon(Icons.Outlined.Info, "Fiche de la fic") }

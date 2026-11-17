@@ -376,16 +376,23 @@ fun BrowserTab() {
         }
 
         if (h.showWeb && ficLink != null) {
-            Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (!inLib) OutlinedButton(onClick = {
-                    LinkFlow.open(h.url, Shelves.TO_READ, read = false)
-                }, modifier = Modifier.weight(1f)) { Icon(Icons.Outlined.LibraryAdd, null); Spacer(Modifier.width(6.dp)); Text("Ajouter") }
-                Button(onClick = {
-                    LinkFlow.open(h.url)
-                }, modifier = Modifier.weight(1f)) { Icon(Icons.AutoMirrored.Outlined.MenuBook, null); Spacer(Modifier.width(6.dp)); Text("Lire dans Ohara") }
-                OutlinedButton(onClick = {
-                    LinkFlow.open(h.url, Shelves.TO_READ, read = false, download = true)
-                }) { Icon(Icons.Outlined.Download, "Tout télécharger") }
+            Surface(color = MaterialTheme.colorScheme.surfaceContainerLow) {
+                Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                    if (LinkFlow.working) {
+                        androidx.compose.material3.CircularProgressIndicator(Modifier.padding(horizontal = 8.dp).size(18.dp), strokeWidth = 2.dp)
+                        Text("Lecture de la fic…", style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
+                    } else Spacer(Modifier.weight(1f))
+                    if (!inLib) TextButton(enabled = !LinkFlow.working, onClick = { LinkFlow.openFromPage(web, h.url, Shelves.TO_READ, read = false) }) {
+                        Icon(Icons.Outlined.LibraryAdd, null, Modifier.size(18.dp)); Spacer(Modifier.width(4.dp)); Text("Ajouter", maxLines = 1)
+                    }
+                    TextButton(enabled = !LinkFlow.working, onClick = { LinkFlow.openFromPage(web, h.url, Shelves.TO_READ, read = false, download = true) }) {
+                        Icon(Icons.Outlined.Download, null, Modifier.size(18.dp)); Spacer(Modifier.width(4.dp)); Text("Télécharger", maxLines = 1)
+                    }
+                    Button(enabled = !LinkFlow.working, onClick = { LinkFlow.openFromPage(web, h.url) },
+                        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 14.dp, vertical = 6.dp)) {
+                        Icon(Icons.AutoMirrored.Outlined.MenuBook, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text("Lire", maxLines = 1)
+                    }
+                }
             }
         }
 
