@@ -50,8 +50,12 @@ object Http {
     /** Sites qui renvoient les téléphones vers une version mobile illisible pour Ohara : FanFiction.net et WebNovel. */
     fun needsDesktop(url: String): Boolean = runCatching {
         val h = java.net.URI(url).host?.lowercase() ?: return@runCatching false
-        h.endsWith("fanfiction.net") || h.endsWith("webnovel.com")
+        val base = h.removePrefix("www.").removePrefix("m.")
+        base !in mobileOverride && (h.endsWith("fanfiction.net") || h.endsWith("webnovel.com"))
     }.getOrDefault(false)
+
+    /** Sites temporairement ouverts en version mobile (choix fait dans le navigateur quand la version ordinateur ne répond pas). */
+    val mobileOverride: MutableSet<String> = java.util.Collections.synchronizedSet(HashSet())
 
     val desktopUserAgent: String
         get() {

@@ -125,6 +125,8 @@ object BrowserHolder {
     var showWeb by mutableStateOf(false)
     var picking by mutableStateOf(false)
     var picked by mutableStateOf<Triple<String, String, Int>?>(null)
+    /** Erreur du serveur du site sur la page affichée (500, 502, 503, 504…), sinon 0. */
+    var serverError by mutableIntStateOf(0)
     @Volatile var pageUrl: String? = null
     private var autoAdded = HashSet<String>()
 
@@ -259,11 +261,16 @@ hide:function(s){try{document.querySelectorAll(s).forEach(function(x){x.style.se
                 return if (AdBlocker.shouldBlock(request.url.toString(), pageUrl)) AdBlocker.emptyResponse() else null
             }
 
+            override fun onReceivedHttpError(view: WebView, request: WebResourceRequest, errorResponse: WebResourceResponse) {
+                if (request.isForMainFrame && errorResponse.statusCode >= 500) serverError = errorResponse.statusCode
+            }
+
             override fun onPageStarted(view: WebView, u: String?, favicon: Bitmap?) {
                 // redirection du site vers sa version mobile : on repasse sur la version ordinateur
                 if (u != null && Http.isFfn(u) && Http.desktopUrl(u) != u) { view.stopLoading(); load(view, u); return }
                 pageUrl = u; url = u.orEmpty(); AdBlocker.PageStats.blocked = 0; blocked = 0
                 PageTranslator.newPage()
+                serverError = 0
                 picking = false; picked = null
             }
 
@@ -297,7 +304,7 @@ hide:function(s){try{document.querySelectorAll(s).forEach(function(x){x.style.se
         }
         web = w
         com.thousandlabs.ohara.net.ApiBrowser.visibleProvider = { host ->
-            web?.takeIf { v -> showWeb && runCatching { java.net.URI(v.url ?: "").host?.lowercase()?.removePrefix("www.")?.removePrefix("m.") == host }.getOrDefault(false) }
+            web?.takeIf { v -> showWeb && runCatching { java.net.URI(v.url ?: "").host?.lowercase() == host }.getOrDefault(false) }
         }
         return w
     }
@@ -413,6 +420,21 @@ fun BrowserTab() {
             }
         }
 
+        if (h.showWeb && h.serverError >= 500) {
+            val site = host.removePrefix("www.").removePrefix("m.")
+            NoteCard("Le serveur de $site ne répond pas (erreur ${h.serverError}). Le problème vient du site, pas d'Ohara : réessayez dans quelques minutes." +
+                if (Http.needsDesktop(h.url)) " Vous pouvez aussi essayer sa version mobile." else "",
+                icon = Icons.Outlined.Public, action = {
+                    Column {
+                        TextButton(onClick = { web.reload() }) { Text("Réessayer") }
+                        if (Http.needsDesktop(h.url)) TextButton(onClick = {
+                            Http.mobileOverride.add(site)
+                            Toast.show("Version mobile de $site pour cette session. Ohara la lira par son service de données.")
+                            h.load(web, h.url)
+                        }) { Text("Version mobile") }
+                    }
+                })
+        }
         if (LinkFlow.pending != null && h.showWeb && !h.verifying) {
             NoteCard("Ohara ouvre la fic dès que la page est affichée. Si une case « Je ne suis pas un robot » apparaît, cochez-la.", icon = Icons.Outlined.VerifiedUser, action = {
                 TextButton(onClick = { LinkFlow.pending = null }) { Text("Annuler") }

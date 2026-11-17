@@ -41,7 +41,8 @@ object ApiBrowser {
     suspend fun fetch(apiUrl: String, originUrl: String, timeoutMs: Long = 25_000): String = mutex.withLock {
         withContext(Dispatchers.Main) {
             val host = base(URI(apiUrl).host ?: "")
-            val visible = visibleProvider?.invoke(host)
+            // la page affichée ne sert que si elle est exactement sur le même site (sinon le navigateur refuse la requête)
+            val visible = visibleProvider?.invoke((URI(apiUrl).host ?: "").lowercase())
             val web = visible ?: pageFor(host, originUrl)
             try {
                 run(web, apiUrl, timeoutMs)
