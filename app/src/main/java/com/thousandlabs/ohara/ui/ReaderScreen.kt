@@ -237,12 +237,12 @@ fun ReaderScreen(ficId: String, startChapter: Int?) {
             modifier = Modifier.fillMaxSize(),
             factory = { ctx ->
                 WebView(ctx).apply {
-                    settings.javaScriptEnabled = true
-                    settings.domStorageEnabled = false
-                    settings.allowFileAccess = false
-                    settings.allowContentAccess = false
-                    settings.blockNetworkLoads = true
-                    settings.textZoom = 100
+                    this.settings.javaScriptEnabled = true
+                    this.settings.domStorageEnabled = false
+                    this.settings.allowFileAccess = false
+                    this.settings.allowContentAccess = false
+                    this.settings.blockNetworkLoads = true
+                    this.settings.textZoom = 100
                     setBackgroundColor(android.graphics.Color.parseColor(theme.bg))
                     isVerticalScrollBarEnabled = true
                     webViewClient = object : WebViewClient() {
