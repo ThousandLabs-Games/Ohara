@@ -186,6 +186,7 @@ object BrowserHolder {
 
     val tab: Tab
         get() {
+            if (!restored) restore()
             if (tabs.isEmpty()) tabs.add(Tab(nextId++, ""))
             return tabs[current.coerceIn(0, tabs.lastIndex)]
         }
@@ -235,6 +236,7 @@ object BrowserHolder {
     fun open(raw: String) { toUrl(raw)?.let { openUrl(it, newTab = false) } }
 
     fun openUrl(url: String, newTab: Boolean) {
+        restore()
         val host = runCatching { java.net.URI(url).host }.getOrNull()
         if (!allowedHost(host)) {
             Toast.show("Ce site ne fait pas partie des sites de fics. La navigation libre se débloque dans les réglages.")
@@ -248,6 +250,7 @@ object BrowserHolder {
     }
 
     fun newTab(url: String = "", select: Boolean = true): Tab {
+        restore()
         val t = Tab(nextId++, url)
         tabs.add(t)
         if (select) { current = tabs.lastIndex; t.lastUsed = System.currentTimeMillis() }
@@ -335,6 +338,7 @@ object BrowserHolder {
     private var pendingOffline: Triple<Long, String, String>? = null
 
     fun openOffline(ficId: String, idx: Int) {
+        restore()
         val f = Library.get(ficId) ?: return
         val html = offlineHtml(ficId, idx) ?: run { Toast.show("Ce chapitre n'est pas sur le téléphone."); return }
         Nav.home(Nav.TAB_BROWSER)
@@ -396,7 +400,7 @@ hide:function(s){try{document.querySelectorAll(s).forEach(function(x){x.style.se
         val info = ficInfo(u)
         w.evaluateJavascript(PageMask.script(PageMask.config(info)), null)
         w.evaluateJavascript(PageMask.SELECTION_JS, null)
-        if (info != null && (info.chapterIndex != null || info.chapterKey != null)) w.evaluateJavascript(ReadTracker.script(info), null)
+        if (info != null && (info.chapterIndex != null || info.chapterKey != null || (info.site == Site.SB && u.contains("/reader")))) w.evaluateJavascript(ReadTracker.script(info), null)
         PageTranslator.inject(w)
     }
 

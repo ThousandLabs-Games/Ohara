@@ -26,6 +26,7 @@ import androidx.compose.material.icons.outlined.ContentPaste
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.ErrorOutline
+import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.LocalLibrary
 import androidx.compose.material.icons.outlined.MergeType
 import androidx.compose.material.icons.outlined.MoreVert
@@ -286,10 +287,14 @@ fun LibraryTab() {
                         FicRow(
                             f, showProgress = true, selected = f.id in selection,
                             onLongClick = { selection = if (f.id in selection) selection - f.id else selection + f.id },
-                            trailingText = Library.downloadedCount(f.id).let { n -> if (n in 1 until f.totalChapters) "$n/${f.totalChapters}" else null }
+                            trailing = {
+                                IconButton(onClick = { Nav.push(Screen.FicDetail(f.id)) }) {
+                                    Icon(Icons.Outlined.Info, "Fiche de la fic", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                            }
                         ) {
                             if (selection.isNotEmpty()) selection = if (f.id in selection) selection - f.id else selection + f.id
-                            else Nav.push(Screen.FicDetail(f.id))
+                            else Nav.openFic(f.id)
                         }
                         Divider()
                     }

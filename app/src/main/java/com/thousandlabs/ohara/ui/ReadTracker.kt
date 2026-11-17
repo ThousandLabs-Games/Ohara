@@ -77,7 +77,8 @@ object ReadTracker {
     /** Où se trouve le texte du chapitre selon le site (version téléphone ou ordinateur). */
     fun mainSelector(info: LinkInfo): String = when (info.site) {
         Site.FFN -> "#storytext,#storycontent,.storytext,.storycontent"
-        Site.SB -> (info.chapterKey?.let { "#js-post-$it .bbWrapper,[data-content=\"post-$it\"] .bbWrapper," } ?: "") + "article .bbWrapper"
+        Site.SB -> info.chapterKey?.let { "#js-post-$it .bbWrapper,[data-content=\"post-$it\"] .bbWrapper,article .bbWrapper" }
+            ?: ".p-body-pageContent,.block-body"
         Site.WN -> ".cha-words,.cha-content,.chapter_content,.chapter-content,#chapter-content,[class*=chapter-content],[class*=cha-paragraph]"
         Site.OTHER -> "article,#chapter-content,.chapter-content,.entry-content,main"
     }
