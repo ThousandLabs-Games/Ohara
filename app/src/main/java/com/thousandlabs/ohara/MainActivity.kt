@@ -93,7 +93,10 @@ class MainActivity : FragmentActivity() {
 
     override fun onDestroy() {
         if (isFinishing && Prefs.clearOnExit) Privacy.clearBrowsingData(applicationContext)
-        if (Locker.activity === this) Locker.activity = null
+        if (Locker.activity === this) {
+            Locker.activity = null
+            com.thousandlabs.ohara.net.HiddenHost.container = null
+        }
         // l'icône ne change que quand l'appli est vraiment fermée (sinon Android ferme la tâche en cours)
         if (isFinishing) IconSwitcher.apply(applicationContext)
         super.onDestroy()
