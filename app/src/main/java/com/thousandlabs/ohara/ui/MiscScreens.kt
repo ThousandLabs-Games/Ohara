@@ -253,6 +253,17 @@ fun GuideScreen() {
 // ---------- Nouveautés de l'appli ----------
 
 private val VERSIONS = listOf(
+    "Révision générale — 17 novembre 2026 (nuit)" to listOf(
+        "Statistiques justes : le temps de lecture est compté pendant que vous avancez dans une page (pas quand le téléphone reste posé), et les mots lus de chaque nouveau chapitre aussi.",
+        "Les chapitres gardés sur le téléphone sont toujours le texte d'origine, même quand la page était affichée traduite.",
+        "Ouvrir une fic de la bibliothèque reprend l'onglet déjà ouvert sur elle, au lieu d'en ajouter un.",
+        "Les favoris apparaissent dans les propositions de la barre d'adresse.",
+        "La sauvegarde contient aussi les favoris, l'historique et les fics en cours de découverte.",
+        "Enregistrements plus sûrs (favoris, historique, chapitres, journal de lecture) : rien n'est abîmé si l'appli s'arrête net ; une bibliothèque illisible est mise de côté au lieu d'être écrasée.",
+        "Vérification des nouveaux chapitres plus prudente : courtes pauses entre les fics, arrêt pour un site qui demande une vérification, plus de fausse alerte « 95 nouveaux chapitres » pour une fic entrée par la lecture.",
+        "Mise à jour de l'appli plus sûre : téléchargement chiffré uniquement, fichier vérifié, bibliothèque enregistrée avant l'installation.",
+        "Partage de fichiers limité aux exports et à l'envoi à Claude."
+    ),
     "Masquage réparé et réglages par site — 17 novembre 2026" to listOf(
         "Masquer une phrase de promo ne masque plus le reste du chapitre : les mots courants (the, and, you…) ne comptent plus pour reconnaître un passage, et jamais plus d'un tiers d'un chapitre ne peut être masqué.",
         "« Masquer un élément » ne peut plus cacher tous les paragraphes d'un site ; les règles qui le faisaient sont retirées automatiquement.",
