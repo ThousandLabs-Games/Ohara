@@ -80,7 +80,7 @@ fun AddScreen() {
                     Text("Un lien de chapitre ouvre la fic à ce chapitre précis : copiez l'adresse dans Brave là où vous vous êtes arrêté.",
                         Modifier.padding(16.dp), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Row(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        val busyNow = busy || LinkFlow.working
+                        val busyNow = busy
                         Button(enabled = !busyNow && Sources.extractUrl(link) != null, onClick = {
                             busy = true
                             LinkFlow.open(link) { busy = false }

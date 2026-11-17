@@ -180,7 +180,7 @@ setTimeout(tick,1200);setInterval(tick,8000);
                 val fic = Fic(
                     id = id, site = info.site, storyId = info.storyId, url = src.storyUrl(info.storyId), title = w.title.ifBlank { "Fic sans titre" },
                     author = w.author, fandoms = listOfNotNull(w.fandom.takeIf { it.isNotBlank() }), status = FicStatus.UNKNOWN,
-                    chapterCount = maxOf(w.chapterCount, (w.lastIndex + 1)), resumeUrl = url, wordsRead = w.words.toInt(),
+                    chapterCount = maxOf(w.chapterCount, (w.lastIndex + 1)), resumeUrl = url, wordsRead = w.words,
                     progressChapter = maxOf(0, w.lastIndex), maxChapterRead = w.lastIndex
                 )
                 Library.upsert(fic, Shelves.READING)
@@ -228,7 +228,7 @@ setTimeout(tick,1200);setInterval(tick,8000);
             title = w?.title?.ifBlank { null } ?: ficTitle(info.site, meta), author = w?.author?.ifBlank { null } ?: meta.optString("author"),
             fandoms = listOfNotNull((w?.fandom?.ifBlank { null } ?: fandomOf(info.site, meta)).takeIf { it.isNotBlank() }),
             chapterCount = maxOf(meta.optInt("opts"), (info.chapterIndex ?: 0) + 1), resumeUrl = url,
-            progressChapter = info.chapterIndex ?: 0, wordsRead = (w?.words ?: 0L).toInt()
+            progressChapter = info.chapterIndex ?: 0, wordsRead = (w?.words ?: 0L)
         )
         Library.upsert(fic, Shelves.READING)
         Toast.show(if (download) "« ${fic.title} » ajoutée : téléchargement lancé." else "« ${fic.title} » ajoutée à votre bibliothèque.")
