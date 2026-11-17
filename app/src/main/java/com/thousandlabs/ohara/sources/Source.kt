@@ -86,6 +86,8 @@ object Cleaner {
     }
 
     /** Texte brut d'un HTML, paragraphes séparés par une ligne vide. */
+    private val RX_BLANK_LINES = Regex("\n{3,}")
+
     fun toText(html: String): String {
         val doc = Jsoup.parse(html)
         doc.select("br").append("\\n")
@@ -93,7 +95,7 @@ object Cleaner {
         doc.select("hr").append("\\n* * *\\n\\n")
         return doc.text().replace("\\n", "\n")
             .lines().joinToString("\n") { it.trim() }
-            .replace(Regex("\n{3,}"), "\n\n").trim()
+            .replace(RX_BLANK_LINES, "\n\n").trim()
     }
 }
 

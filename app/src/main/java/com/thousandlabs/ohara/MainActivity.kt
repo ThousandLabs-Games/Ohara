@@ -62,6 +62,8 @@ class MainActivity : FragmentActivity() {
         when (intent.getStringExtra("ouvrir")) {
             "file" -> { Nav.home(); Nav.push(Screen.Downloads); return }
             "bibliotheque" -> { Nav.home(Nav.TAB_LIBRARY); return }
+            // « Prêt à envoyer à Claude » : l'envoi part au retour à l'écran (onStart)
+            "claude" -> return
         }
         val text = when (intent.action) {
             Intent.ACTION_SEND -> intent.getStringExtra(Intent.EXTRA_TEXT)
@@ -81,11 +83,14 @@ class MainActivity : FragmentActivity() {
     override fun onStart() {
         super.onStart()
         Locker.onStart()
+        // si l'appli est verrouillée, l'envoi attend l'empreinte (voir Locker.unlock)
+        if (Locker.locked) com.thousandlabs.ohara.ui.ClaudePrep.markVisible() else com.thousandlabs.ohara.ui.ClaudePrep.onVisible(this)
     }
 
     override fun onStop() {
         super.onStop()
         Locker.onStop()
+        com.thousandlabs.ohara.ui.ClaudePrep.onHidden()
         AdBlocker.flushCount()
         Library.saveNow()
         com.thousandlabs.ohara.ui.BrowserHolder.saveTabs()

@@ -21,6 +21,7 @@ object Notify {
     const val ID_DOWNLOAD = 41
     private const val ID_UPDATES = 42
     private const val ID_VERIFY = 43
+    private const val ID_CLAUDE = 44
 
     fun init(context: Context) {
         if (Build.VERSION.SDK_INT < 26) return
@@ -43,7 +44,7 @@ object Notify {
         return PendingIntent.getActivity(context, extra.hashCode(), i, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
     }
 
-    fun downloadNotification(context: Context, title: String, text: String, progress: Int, max: Int) =
+    fun downloadNotification(context: Context, title: String, text: String, progress: Int, max: Int, open: String = "file") =
         NotificationCompat.Builder(context, CH_DOWNLOAD)
             .setSmallIcon(R.drawable.ic_notif)
             .setContentTitle(title)
@@ -51,8 +52,40 @@ object Notify {
             .setOnlyAlertOnce(true)
             .setOngoing(true)
             .setProgress(max, progress, max == 0)
-            .setContentIntent(openApp(context, "file"))
+            .setContentIntent(openApp(context, open))
             .build()
+
+    /** Fichiers prêts alors qu'Ohara était en arrière-plan : Android interdit d'ouvrir Claude sans un geste. */
+    fun claudeReady(context: Context, title: String) {
+        if (!allowed(context)) return
+        val text = "« $title » : touchez pour ouvrir l'appli Claude avec les fichiers et la consigne."
+        val n = NotificationCompat.Builder(context, CH_UPDATES)
+            .setSmallIcon(R.drawable.ic_notif)
+            .setContentTitle("Prêt à envoyer à Claude")
+            .setContentText(text)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(text))
+            .setAutoCancel(true)
+            .setContentIntent(openApp(context, "claude"))
+            .build()
+        runCatching { NotificationManagerCompat.from(context).notify(ID_CLAUDE, n) }
+    }
+
+    fun claudeFailed(context: Context, message: String) {
+        if (!allowed(context)) return
+        val n = NotificationCompat.Builder(context, CH_UPDATES)
+            .setSmallIcon(R.drawable.ic_notif)
+            .setContentTitle("Envoi à Claude impossible")
+            .setContentText(message)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(message))
+            .setAutoCancel(true)
+            .setContentIntent(openApp(context, "claude"))
+            .build()
+        runCatching { NotificationManagerCompat.from(context).notify(ID_CLAUDE, n) }
+    }
+
+    fun cancelClaude(context: Context) {
+        runCatching { NotificationManagerCompat.from(context).cancel(ID_CLAUDE) }
+    }
 
     fun updates(context: Context, title: String, text: String) {
         if (!allowed(context)) return

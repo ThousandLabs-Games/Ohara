@@ -200,10 +200,10 @@ object Library {
     }
 
     /** Nombre de mots d'un texte HTML de chapitre. */
-    fun countWords(html: String): Int {
-        val text = html.replace(Regex("<[^>]+>"), " ")
-        return Regex("[\\p{L}\\p{N}'’-]+").findAll(text).count()
-    }
+    private val RX_TAG = Regex("<[^>]+>")
+    private val RX_WORD = Regex("[\\p{L}\\p{N}'’-]+")
+
+    fun countWords(html: String): Int = RX_WORD.findAll(html.replace(RX_TAG, " ")).count()
 
     fun storageBytes(): Long = File(root, "fics").walkTopDown().filter { it.isFile }.sumOf { it.length() }
 }

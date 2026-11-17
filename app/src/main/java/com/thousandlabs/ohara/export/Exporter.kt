@@ -12,6 +12,9 @@ import com.thousandlabs.ohara.sources.Cleaner
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Entities
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import java.io.File
 import java.io.FileOutputStream
 import java.text.SimpleDateFormat
@@ -230,13 +233,15 @@ $points
     // ---------- Pack Claude ----------
 
     /** Découpe le texte en parties d'environ [wordsPerPart] mots, sans couper un chapitre. */
-    fun parts(f: Fic, range: Range, wordsPerPart: Int): List<Pair<IntRange, String>> {
+    fun parts(f: Fic, range: Range, wordsPerPart: Int, onChapter: (Int, Int) -> Unit = { _, _ -> }): List<Pair<IntRange, String>> {
         val out = mutableListOf<Pair<IntRange, String>>()
         val sb = StringBuilder()
         var words = 0
         var start = -1
         var last = -1
+        val count = range.to - range.from + 1
         for (i in range.from..range.to) {
+            onChapter(i - range.from, count)
             val html = chapterHtml(f, i) ?: continue
             val text = Cleaner.toText(html)
             val w = Library.countWords(html)
@@ -324,13 +329,21 @@ $points
      * Fichiers séparés pour « Envoyer à Claude » (l'appli Claude ne lit pas les archives) :
      * fiche, personnages, surlignages, puis le texte en parties.
      */
-    suspend fun claudeFiles(context: Context, f0: Fic, range: Range, onProgress: (String) -> Unit = {}): Pair<List<File>, Int> {
-        ensureChapters(f0, range) { d, t -> if (t > 0) onProgress("Téléchargement des chapitres manquants : $d/$t") }
+    suspend fun claudeFiles(context: Context, f0: Fic, range: Range, onProgress: (String, Int, Int) -> Unit = { _, _, _ -> }): Pair<List<File>, Int> {
+        val job = currentCoroutineContext()[Job]
+        ensureChapters(f0, range) { d, t ->
+            job?.ensureActive()
+            if (t > 0) onProgress("Téléchargement des chapitres manquants : $d sur $t", d, t)
+        }
         val f = Library.get(f0.id) ?: f0
-        onProgress("Préparation des fichiers…")
         val dir = File(context.cacheDir, "claude").apply { deleteRecursively(); mkdirs() }
         val base = fileName(f, Format.TXT).removeSuffix(".txt").take(50).trim()
-        val parts = parts(f, range, Prefs.packWordsPerPart.coerceAtLeast(5000))
+        val parts = parts(f, range, Prefs.packWordsPerPart.coerceAtLeast(5000)) { d, t ->
+            job?.ensureActive()
+            onProgress("Préparation des fichiers : chapitre ${d + 1} sur $t", d, t)
+        }
+        job?.ensureActive()
+        onProgress("Création des fichiers…", 0, 0)
         val out = mutableListOf<File>()
         fun put(name: String, text: String) { out += File(dir, name).apply { writeText(text) } }
         put("1 - $base - fiche.md", fiche(f))

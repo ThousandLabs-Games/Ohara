@@ -70,11 +70,23 @@ object Masking {
     fun remove(rule: Rule) = save(rules().filterNot { it.phrase == rule.phrase && it.scope == rule.scope && it.target == rule.target })
 
     /** Texte comparable : minuscules, sans ponctuation, chiffres neutralisés (« 10 chapters ahead » = « 12 chapters ahead »). */
+    // Expressions pr\u00e9par\u00e9es une seule fois : les recr\u00e9er pour chaque paragraphe rendait l'envoi \u00e0 Claude
+    // et les exports tr\u00e8s lents sur les longues fics.
+    private val RX_QUOTES = Regex("[\u2018\u2019\u201c\u201d]")
+    private val RX_DIGITS = Regex("\\d+")
+    private val RX_NON_WORD = Regex("[^\\p{L}#']+")
+
     private fun normalize(s: String) = s.lowercase()
-        .replace(Regex("[\u2018\u2019\u201c\u201d]"), "'")
-        .replace(Regex("\\d+"), "#")
-        .replace(Regex("[^\\p{L}#']+"), " ")
-        .replace(Regex("\\s+"), " ").trim()
+        .replace(RX_QUOTES, "'")
+        .replace(RX_DIGITS, "#")
+        .replace(RX_NON_WORD, " ")
+        .trim()
+
+    /** R\u00e8gle pr\u00eate \u00e0 comparer : phrase normalis\u00e9e et mots porteurs, calcul\u00e9s une fois par chapitre. */
+    private class Prepared(val phrase: String, val words: Set<String>)
+
+    private fun prepare(rules: List<Rule>, fic: Fic): List<Prepared> =
+        rules.filter { it.applies(fic) }.map { normalize(it.phrase) }.filter { it.isNotEmpty() }.distinct().map { Prepared(it, words(it)) }
 
     /** Mots courants ignorés pour la ressemblance : sinon une phrase de promo « ressemble » à n'importe quel paragraphe. */
     private val STOP = ("the and you your for with that this was were are not but have has had from they them their there then than what when where which " +
@@ -88,14 +100,14 @@ object Masking {
      * Le passage correspond-il à la règle ? Il doit avoir à peu près la taille de la règle (une phrase ne fait jamais
      * masquer tout un chapitre), puis contenir la règle, ou au moins 80 % de ses mots porteurs (4 au minimum).
      */
-    private fun matches(n: String, phrase: String): Boolean {
-        if (phrase.isEmpty() || n.length > maxOf(phrase.length * 2.5, phrase.length + 160.0)) return false
+    private fun matches(n: String, nw: Lazy<Set<String>>, rule: Prepared): Boolean {
+        val phrase = rule.phrase
+        if (n.length > maxOf(phrase.length * 2.5, phrase.length + 160.0)) return false
         if (n.contains(phrase)) return true
         if (n.length < phrase.length * 0.6 || n.length > phrase.length * 1.8) return false
-        val pw = words(phrase)
+        val pw = rule.words
         if (pw.size < 4) return false
-        val nw = words(n)
-        return pw.count { it in nw } >= maxOf(4, Math.ceil(pw.size * 0.8).toInt())
+        return pw.count { it in nw.value } >= maxOf(4, Math.ceil(pw.size * 0.8).toInt())
     }
 
     private val PROMO = Regex(
@@ -107,21 +119,27 @@ object Masking {
             "\\bcheck out my\\b|my other (stories|fics|works)|\\bwebnovel\\.com/profile",
         RegexOption.IGNORE_CASE
     )
+    private val SEPARATOR = Regex("^\\s*([-*_=~x.o]\\s*){3,}\\s*$|^\\s*(line ?break|scene ?break)\\s*$", RegexOption.IGNORE_CASE)
     private val AUTHOR_NOTE = Regex("^\\s*(a/n|an:|a\\.n\\.|author'?s'? notes?|note de l'auteur|n/a)\\b", RegexOption.IGNORE_CASE)
 
     data class Result(val html: String, val hidden: Int)
 
     /** Transforme les textes découpés par des sauts de ligne (SpaceBattles…) en vrais paragraphes. */
+    private val RX_P = Regex("<p[\\s>]", RegexOption.IGNORE_CASE)
+    private val RX_BR = Regex("<br\\s*/?>", RegexOption.IGNORE_CASE)
+    private val RX_BR_RUN = Regex("(?:<br\\s*/?>\\s*){2,}", RegexOption.IGNORE_CASE)
+    private val RX_BLOCK_START = Regex("^<(p|div|blockquote|h[1-6]|ul|ol|table|hr|center)[\\s>/]", RegexOption.IGNORE_CASE)
+
     fun paragraphs(html: String): String {
-        val pCount = Regex("<p[\\s>]", RegexOption.IGNORE_CASE).findAll(html).count()
-        val brCount = Regex("<br\\s*/?>", RegexOption.IGNORE_CASE).findAll(html).count()
-        if (pCount >= 3 || brCount < 4) return html
-        return html.split(Regex("(\\s*<br\\s*/?>\\s*){2,}", RegexOption.IGNORE_CASE))
+        val pCount = RX_P.findAll(html).take(3).count()
+        if (pCount >= 3) return html
+        val brCount = RX_BR.findAll(html).take(4).count()
+        if (brCount < 4) return html
+        return html.split(RX_BR_RUN)
             .filter { it.isNotBlank() }
             .joinToString("") { part ->
                 val t = part.trim()
-                if (Regex("^<(p|div|blockquote|h[1-6]|ul|ol|table|hr|center)[\\s>/]", RegexOption.IGNORE_CASE).containsMatchIn(t)) t
-                else "<p>$t</p>"
+                if (RX_BLOCK_START.containsMatchIn(t)) t else "<p>$t</p>"
             }
     }
 
@@ -133,10 +151,14 @@ object Masking {
     private val BLOCK_TAGS = setOf("p", "div", "li", "blockquote", "ul", "ol", "table", "h1", "h2", "h3", "h4", "center")
 
     /** Pourquoi ce passage serait masqué (null s'il ne l'est pas). */
-    private fun reason(text: String, fic: Fic, rules: List<Rule>): String? {
-        val n = normalize(text)
-        if (n.isEmpty()) return null
-        if (rules.any { it.applies(fic) && matches(n, normalize(it.phrase)) }) return "règle"
+    private fun reason(text: String, rules: List<Prepared>): String? {
+        if (text.isBlank()) return null
+        if (rules.isNotEmpty()) {
+            val n = normalize(text)
+            if (n.isEmpty()) return null
+            val nw = lazy(LazyThreadSafetyMode.NONE) { words(n) }
+            if (rules.any { matches(n, nw, it) }) return "règle"
+        }
         if (autoPromo && PROMO.containsMatchIn(text) && text.length < 900) return "promo"
         if (authorNotes && AUTHOR_NOTE.containsMatchIn(text)) return "note"
         return null
@@ -147,26 +169,26 @@ object Masking {
      */
     fun applyToHtml(fic: Fic, html: String, remove: Boolean = false): Result {
         val doc = Jsoup.parseBodyFragment(paragraphs(html))
-        val rules = rules()
+        val rules = prepare(rules(), fic)
         val list = blocks(doc)
+        val texts = list.map { it.text() }
         val flagged = BooleanArray(list.size)
         val byRule = BooleanArray(list.size)
-        list.forEachIndexed { i, el -> reason(el.text(), fic, rules)?.let { flagged[i] = true; byRule[i] = it == "règle" } }
+        texts.forEachIndexed { i, t -> reason(t, rules)?.let { flagged[i] = true; byRule[i] = it == "règle" } }
         // Garde-fou : des règles qui masqueraient plus d'un tiers du chapitre sont ignorées pour ce chapitre.
-        val total = list.sumOf { it.text().length }
-        val ruled = list.indices.filter { byRule[it] }.sumOf { list[it].text().length }
+        val total = texts.sumOf { it.length }
+        val ruled = list.indices.filter { byRule[it] }.sumOf { texts[it].length }
         if (total > 1500 && ruled > total * 0.34) list.indices.filter { byRule[it] }.forEach { flagged[it] = false }
         // Notes d'auteur sur plusieurs paragraphes : d'un « A/N » en début de chapitre jusqu'au séparateur,
         // et d'un « A/N » en fin de chapitre jusqu'à la fin.
         if (authorNotes && list.isNotEmpty()) {
-            val sep = Regex("^\\s*([-*_=~x.o]\\s*){3,}\\s*$|^\\s*(line ?break|scene ?break)\\s*$", RegexOption.IGNORE_CASE)
-            val head = list.take(15).indexOfFirst { AUTHOR_NOTE.containsMatchIn(it.text()) }
+            val head = texts.take(15).indexOfFirst { AUTHOR_NOTE.containsMatchIn(it) }
             if (head in 0..4) {
-                val end = (head + 1 until minOf(list.size, head + 12)).firstOrNull { sep.matches(list[it].text()) || list[it].tagName() == "hr" }
+                val end = (head + 1 until minOf(list.size, head + 12)).firstOrNull { SEPARATOR.matches(texts[it]) || list[it].tagName() == "hr" }
                 if (end != null) for (i in head until end) flagged[i] = true
             }
             val from = list.size - 12
-            val tail = (maxOf(0, from) until list.size).firstOrNull { AUTHOR_NOTE.containsMatchIn(list[it].text()) }
+            val tail = (maxOf(0, from) until list.size).firstOrNull { AUTHOR_NOTE.containsMatchIn(texts[it]) }
             if (tail != null) for (i in tail until list.size) flagged[i] = true
         }
         var hidden = 0

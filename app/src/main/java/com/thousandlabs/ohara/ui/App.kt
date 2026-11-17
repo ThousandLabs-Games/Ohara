@@ -57,7 +57,7 @@ object Locker {
 
     fun onStop() { backgroundAt = System.currentTimeMillis() }
 
-    fun unlock() { activity?.authenticate { locked = false } }
+    fun unlock() { activity?.authenticate { locked = false; activity?.let { ClaudePrep.onVisible(it) } } }
 }
 
 

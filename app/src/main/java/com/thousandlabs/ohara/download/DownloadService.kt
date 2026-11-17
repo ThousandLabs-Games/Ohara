@@ -45,7 +45,8 @@ class DownloadService : Service() {
         val jobs = Downloads.jobs.value
         val running = jobs.firstOrNull { it.state == DownloadJob.State.RUNNING }
         val waiting = jobs.count { it.state == DownloadJob.State.WAITING }
-        if (running == null && waiting == 0) {
+        val claude = com.thousandlabs.ohara.ui.ClaudePrep.state.value?.takeIf { it.ready == null }
+        if (running == null && waiting == 0 && claude == null) {
             ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
             stopSelf()
             return
@@ -54,12 +55,19 @@ class DownloadService : Service() {
             val rest = if (waiting > 0) " · encore $waiting fic${if (waiting > 1) "s" else ""} en attente" else ""
             "${running.done}/${running.total} chapitres$rest"
         } else "En attente…"
-        val n = Notify.downloadNotification(this, running?.title ?: "Ohara", text, running?.done ?: 0, running?.total ?: 0)
+        val n = if (running == null && claude != null)
+            Notify.downloadNotification(this, "Envoi à Claude : ${claude.title}", claude.message, claude.done, claude.total, open = "claude")
+        else Notify.downloadNotification(this, running?.title ?: "Ohara", text, running?.done ?: 0, running?.total ?: 0)
         if (Notify.allowed(this)) runCatching { NotificationManagerCompat.from(this).notify(Notify.ID_DOWNLOAD, n) }
     }
 
     companion object {
         @Volatile private var instance: DownloadService? = null
+
+        /** Démarre le service (à appeler pendant que l'appli est à l'écran). */
+        fun start(context: Context) {
+            runCatching { androidx.core.content.ContextCompat.startForegroundService(context, Intent(context, DownloadService::class.java)) }
+        }
 
         fun refresh(context: Context) {
             instance?.let { s -> android.os.Handler(android.os.Looper.getMainLooper()).post { s.update() } }

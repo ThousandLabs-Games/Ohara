@@ -28,7 +28,7 @@ Ohara réunit au même endroit la recherche, la lecture, le téléchargement et 
 - Étagères (À lire, En cours, Favoris, Pour Claude, Déjà lues, Abandonnées et les vôtres), note sur 10, commentaire, raison d'abandon, fiches personnages.
 - Badges : nouveaux chapitres, fic terminée, inactive, supprimée du site ; doublons FanFiction.net / SpaceBattles fusionnés.
 - Chapitres lus gardés sur le téléphone ; téléchargement complet au choix ; « Téléchargements » affiche les chapitres comme des pages, sans connexion.
-- « Envoyer à Claude » en un geste (fichiers et consigne choisie vers l'appli Claude) ; exports EPUB, TXT et Pack Claude.
+- « Envoyer à Claude » en un geste (fichiers et consigne choisie vers l'appli Claude), avec compteur, annulation et préparation qui continue en arrière-plan (notification « Prêt à envoyer à Claude ») ; exports EPUB, TXT et Pack Claude.
 
 ### Découverte
 - Recherche avancée multi-sites, score « Prometteuse » aux critères réglables, « Pour vous », « Nouveautés », « Trouver une fic similaire ».
