@@ -198,7 +198,8 @@ private fun StatBox(label: String, value: String, modifier: Modifier = Modifier)
 
 private val GUIDE = listOf(
     "Naviguer" to "Ohara s'ouvre sur le navigateur. La barre du haut sert à taper une adresse ou une recherche ; la barre du bas : page précédente, page suivante, accueil, onglets (le chiffre), bibliothèque et menu. Les pages s'affichent comme sur le téléphone ; menu › « Version ordinateur » pour passer en version ordinateur sur un onglet.",
-    "Onglets" to "Touchez le carré chiffré en bas pour voir tous les onglets, en ouvrir un nouveau, en fermer un ou tout fermer. Les onglets sont gardés quand vous fermez l'appli.",
+    "Onglets" to "Touchez le carré chiffré en bas : chaque onglet montre un aperçu de sa page et l'icône du site. Cherchez un onglet par son titre, ouvrez-en un nouveau avec le bouton +, fermez-en un avec la croix. Les onglets sont gardés quand vous fermez l'appli.",
+    "Lire en plein écran" to "Quand vous descendez dans une page, les barres du haut et du bas disparaissent pour laisser tout l'écran au chapitre ; remontez un peu pour les faire revenir. Réglages › Apparence › « Cacher les barres en lisant » pour désactiver.",
     "La bibliothèque se remplit toute seule" to "Lisez une fic dans le navigateur : dès que vous en avez lu 10 000 mots (réglable), elle entre dans la bibliothèque, étagère « En cours ». Un chapitre compte comme lu quand vous en avez parcouru 60 %. Sous la barre d'adresse, une ligne indique où vous en êtes. Pour l'ajouter tout de suite : menu › « Ajouter à la bibliothèque ».",
     "Reprendre là où vous vous êtes arrêté" to "Dans la bibliothèque, ou dans « Reprendre la lecture » sur la page d'accueil, touchez une fic : elle s'ouvre exactement à la dernière page lue. Le bouton « i » ouvre sa fiche (étagères, note, commentaire, personnages, chapitres, exports).",
     "Masquer une phrase ou un passage" to "Appui long sur une phrase, puis « Masquer » : le paragraphe disparaît tout de suite, et aussi dans les chapitres suivants. Choisissez la portée : cette fic, cet auteur, ou partout. La règle reconnaît le passage même si un nombre ou quelques mots changent. Les promos (Patreon, Discord, chapitres d'avance…) et les notes d'auteur sont masquées d'office. Tout se gère dans Réglages › Passages masqués.",
@@ -244,6 +245,10 @@ fun GuideScreen() {
 // ---------- Nouveautés de l'appli ----------
 
 private val VERSIONS = listOf(
+    "Onglets et plein écran — 17 novembre 2026" to listOf(
+        "Liste des onglets avec un aperçu de chaque page, l'icône du site et une recherche dans les onglets.",
+        "Les barres se cachent quand vous descendez dans un chapitre et reviennent quand vous remontez."
+    ),
     "Ohara devient un navigateur — 17 novembre 2026" to listOf(
         "Ohara s'ouvre directement sur le navigateur, en version téléphone ; « Version ordinateur » au choix dans le menu, onglet par onglet.",
         "Onglets, page d'accueil (recherche, reprise de lecture, sites, raccourcis), barre d'outils en bas, menu complet, recherche dans la page, propositions dans la barre d'adresse.",

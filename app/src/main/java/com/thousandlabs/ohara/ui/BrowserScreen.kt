@@ -607,7 +607,7 @@ fun BrowserHome() {
             if (showBars) AddressBar(t, editing, onEdit = { editing = it })
             else Spacer(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceContainer).statusBarsPadding())
             if (!editing) {
-                PageNotes(t)
+                if (showBars || t.serverError >= 500 || BrowserHolder.verifying) PageNotes(t)
                 Box(Modifier.weight(1f).fillMaxWidth()) {
                     key(t.id) {
                         AndroidView(
