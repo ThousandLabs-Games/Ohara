@@ -193,6 +193,7 @@ private val GUIDE = listOf(
     "Reprendre là où vous vous êtes arrêté" to "Ohara retient la position exacte dans le chapitre. Si vous avez lu ailleurs, collez le lien du chapitre où vous êtes : la fic s'ouvre à ce chapitre et la progression est mise à jour.",
     "Télécharger tous les chapitres" to "Sur la fiche d'une fic, « Télécharger ». Les chapitres arrivent un par un avec des pauses, pour ne pas être bloqué par le site, et le téléchargement continue écran éteint. Si un site demande « Je ne suis pas un robot », une notification vous l'indique : touchez « Vérifier », cochez la case, et tout reprend.",
     "Lire confortablement" to "Dans le lecteur, touchez le milieu de l'écran pour afficher les barres, le haut ou le bas pour changer de page. Le bouton « Aa » règle la police, la taille, l'interligne, les marges, le thème (clair, sépia, sombre, noir) et la lecture continue. Le temps restant est calculé selon votre vitesse réelle.",
+    "Lire en français" to "Dans le lecteur, touchez l'icône de traduction en haut. La première fois, Ohara télécharge le modèle anglais-français (une trentaine de Mo) ; ensuite la traduction se fait sur le téléphone, sans connexion, et rien n'est envoyé à personne. Chaque chapitre traduit est gardé. Touchez à nouveau l'icône pour revenir au texte original.",
     "Surligner et prendre des notes" to "Appui long sur un mot, ajustez la sélection, puis « Surligner » ou « Note ». Les passages surlignés apparaissent sur la fiche de la fic et partent dans le Pack Claude.",
     "Masquer les promos et notes d'auteur" to "Appui long sur un passage, puis « Masquer ce genre de passage ». Choisissez une phrase repère et la portée : cette fic, cet auteur, ou toutes les fics. Les promos Patreon, Ko-fi et Discord sont déjà repliées d'office ; touchez un passage replié pour le lire quand même.",
     "Rechercher une fic précise" to "Découvrir › Recherche : site, fandom, personnages, type (self-insert, crossover, AU, fix-it, isekai, time travel, System, transmigration, OC), longueur, nombre de chapitres, statut, dates et tri. Une touche sur un type l'inclut, deux touches l'excluent.",
@@ -238,7 +239,9 @@ private val VERSIONS = listOf(
         "Coller un lien ouvre maintenant la fic à coup sûr : si le site demande une vérification ou tarde à répondre, la page s'ouvre dans le navigateur d'Ohara et la fic s'ouvre toute seule dès que la page s'affiche.",
         "Sur FanFiction.net, la fiche et le chapitre affiché sont lus directement sur la page, sans attendre.",
         "Ohara ne se ferme plus toute seule en arrière-plan : l'icône du moment change désormais seulement quand l'appli est fermée.",
-        "Le bouton « Vérifier » du lecteur ramène directement au chapitre une fois la vérification passée."
+        "Le bouton « Vérifier » du lecteur ramène directement au chapitre une fois la vérification passée.",
+        "Navigateur : « Ajouter », « Télécharger » et « Lire » lisent la fic directement sur la page affichée, avec un indicateur pendant l'opération.",
+        "Nouveau : traduction en français dans le lecteur, faite sur le téléphone."
     ),
     "Première version — novembre 2026" to listOf(
         "Bibliothèque avec étagères (À lire, En cours, Favoris, Pour Claude, Déjà lues, Abandonnées et étagères personnelles), notes sur 10, commentaires, raisons d'abandon et fiches personnages.",

@@ -25,6 +25,7 @@ Ohara réunit au même endroit la recherche, la lecture, le téléchargement et 
 ### Lecteur
 - Polices, taille, interligne, marges, texte justifié.
 - Thèmes clair, sépia, sombre et noir.
+- Traduction en français, faite sur le téléphone (modèle téléchargé une seule fois, puis hors connexion).
 - Lecture continue ou chapitre par chapitre, touches de volume, écran toujours allumé.
 - Surlignage avec notes, temps de lecture restant (selon votre vitesse réelle), reprise à la position exacte.
 - Appui long sur un passage : « Masquer ce genre de passage » (promos Patreon, notes d'auteur…), pour une fic, un auteur ou toutes les fics.
