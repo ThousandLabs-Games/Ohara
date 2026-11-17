@@ -839,18 +839,24 @@ private fun Suggestions(q: String, onPick: () -> Unit) {
     val sugg = remember(q, history, lib) {
         if (q.length < 2) emptyList() else {
             val fics = lib.filter { it.title.contains(q, true) }.take(4).map { Triple(it.title, "Bibliothèque", "fic:" + it.id) }
+            val marks = com.thousandlabs.ohara.data.Bookmarks.items.value.filter { it.title.contains(q, true) || it.url.contains(q, true) }
+                .take(3).map { Triple(it.title, "Favori · " + it.folder, "fav:" + it.url) }
             val pages = history.filter { it.kind == History.Kind.PAGE && (it.title.contains(q, true) || it.target.contains(q, true)) }
                 .distinctBy { it.target }.take(6).map { Triple(it.title, it.target, it.target) }
-            fics + pages
+            fics + marks + pages.filter { p -> marks.none { it.third == "fav:" + p.third } }
         }
     }
     Column(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.background)) {
         sugg.forEach { (title, sub, target) ->
             Row(Modifier.fillMaxWidth().clickable {
                 onPick()
-                if (target.startsWith("fic:")) Nav.openFic(target.removePrefix("fic:")) else BrowserHolder.openUrl(target, newTab = false)
+                when {
+                    target.startsWith("fic:") -> Nav.openFic(target.removePrefix("fic:"))
+                    target.startsWith("fav:") -> BrowserHolder.openUrl(target.removePrefix("fav:"), newTab = false)
+                    else -> BrowserHolder.openUrl(target, newTab = false)
+                }
             }.padding(horizontal = 20.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                Icon(if (target.startsWith("fic:")) Icons.Outlined.LocalLibrary else Icons.Outlined.History, null, Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                Icon(when { target.startsWith("fic:") -> Icons.Outlined.LocalLibrary; target.startsWith("fav:") -> Icons.Outlined.StarOutline; else -> Icons.Outlined.History }, null, Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                 Spacer(Modifier.width(14.dp))
                 Column(Modifier.weight(1f)) {
                     Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyMedium)

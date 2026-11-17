@@ -114,6 +114,8 @@ object AppUpdater {
                 conn.instanceFollowRedirects = false
                 while (conn.responseCode in 300..399 && hops < 6) {
                     url = conn.getHeaderField("Location") ?: break
+                    // jamais de redirection vers une adresse non chiffrée
+                    if (!url.startsWith("https://")) throw IllegalStateException("Adresse de téléchargement non sûre.")
                     conn.disconnect(); conn = open(url); conn.instanceFollowRedirects = false; hops++
                 }
                 if (conn.responseCode != 200) throw IllegalStateException("Téléchargement refusé (${conn.responseCode}).")
@@ -132,6 +134,10 @@ object AppUpdater {
                     }
                 }
                 conn.disconnect()
+                if (rel.size > 0 && file.length() != rel.size) throw IllegalStateException("Fichier incomplet : réessayez.")
+                // l'installation ferme l'appli : tout est enregistré avant
+                com.thousandlabs.ohara.data.Library.saveNow()
+                kotlinx.coroutines.withContext(Dispatchers.Main) { com.thousandlabs.ohara.ui.BrowserHolder.saveTabs() }
                 install(app, file)
             }.onFailure { e ->
                 _state.value = _state.value.copy(downloading = false, message = "Échec : ${e.message ?: "erreur inconnue"}")
