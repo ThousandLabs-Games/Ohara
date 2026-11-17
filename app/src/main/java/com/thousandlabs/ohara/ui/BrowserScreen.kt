@@ -879,7 +879,6 @@ private fun BottomToolbar(t: Tab, onMenu: () -> Unit) {
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun MaskUndoBar(t: Tab) {
     val rule = t.lastMasked ?: return
@@ -894,6 +893,7 @@ private fun MaskUndoBar(t: Tab) {
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun SelectionBar(t: Tab) {
     val sel = t.selection ?: return
