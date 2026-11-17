@@ -241,6 +241,7 @@ private val VERSIONS = listOf(
         "Le chapitre suivant s'affiche tout de suite ; la traduction se fait ensuite sur place, en commençant par l'écran visible, comme dans un navigateur.",
         "Menu de traduction dans le lecteur : « Traduire ce chapitre », « Afficher le texte original », « Toujours traduire l'anglais ».",
         "Masquage plus efficace : passages retirés complètement, règles tolérantes aux nombres et aux petites différences, notes d'auteur sur plusieurs paragraphes, plus de formules de promo reconnues.",
+        "Quand le serveur d'un site ne répond pas (erreur 504…), le navigateur l'explique et propose « Réessayer » ou la version mobile du site.",
         "Appli plus fluide : la position de lecture n'est plus enregistrée à chaque mouvement, bibliothèque plus rapide, transitions entre les écrans."
     ),
     "Améliorations — 17 novembre 2026 (après-midi)" to listOf(
