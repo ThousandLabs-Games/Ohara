@@ -19,6 +19,7 @@ class OharaApp : Application() {
         Prefs.init(this)
         Library.init(this)
         HiddenLog.init(Library.dataDir())
+        com.thousandlabs.ohara.discover.Masking.repairOnce()
         com.thousandlabs.ohara.data.History.init(Library.dataDir())
         com.thousandlabs.ohara.data.Bookmarks.init(Library.dataDir())
         com.thousandlabs.ohara.ui.ReadTracker.init(Library.dataDir())

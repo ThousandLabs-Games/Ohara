@@ -257,3 +257,39 @@ fun BookmarksScreen() {
             dismissButton = { TextButton(onClick = { dropFolder = null }) { Text("Annuler") } })
     }
 }
+
+/** Passages masqués qui s'appliquent à la page ouverte : réafficher une règle, ou tout afficher momentanément. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun MaskedSheet(t: Tab, onClose: () -> Unit) {
+    val info = remember(t.url) { BrowserHolder.ficInfo(t.url) }
+    var rules by remember { mutableStateOf(PageMask.rulesFor(info)) }
+    val cs = MaterialTheme.colorScheme
+    ModalBottomSheet(onDismissRequest = onClose) {
+        Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
+            Text("Passages masqués", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(horizontal = 24.dp))
+            Text("Les règles qui s'appliquent à cette page. « Afficher de nouveau » supprime la règle : le passage revient ici et dans les autres chapitres.",
+                style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant, modifier = Modifier.padding(horizontal = 24.dp, vertical = 4.dp))
+            SheetRow(Icons.Outlined.Visibility, "Tout afficher sur cette page", "Pour cette fois seulement, règles, promos et notes d'auteur comprises") {
+                t.web?.evaluateJavascript(PageMask.SHOW_ALL_JS, null); Toast.show("Tout est affiché sur cette page."); onClose()
+            }
+            HorizontalDivider(Modifier.padding(vertical = 4.dp))
+            if (rules.isEmpty()) Text("Aucune de vos règles ne s'applique ici. Seuls les promos et les notes d'auteur peuvent être masquées d'office (Réglages › Passages masqués).",
+                style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(horizontal = 24.dp, vertical = 10.dp))
+            rules.forEach { r ->
+                Row(Modifier.fillMaxWidth().padding(start = 24.dp, end = 8.dp, top = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("« ${r.phrase.take(160)}${if (r.phrase.length > 160) "…" else ""} »", style = MaterialTheme.typography.bodyMedium, maxLines = 3, overflow = TextOverflow.Ellipsis)
+                        Text(r.scope.label, style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
+                    }
+                    TextButton(onClick = {
+                        com.thousandlabs.ohara.discover.Masking.remove(r)
+                        rules = PageMask.rulesFor(info)
+                        t.web?.reload()
+                    }) { Text("Afficher de nouveau") }
+                }
+            }
+            TextButton(onClick = { onClose(); Nav.push(Screen.Settings("masquage")) }, modifier = Modifier.padding(horizontal = 12.dp)) { Text("Toutes les règles") }
+        }
+    }
+}

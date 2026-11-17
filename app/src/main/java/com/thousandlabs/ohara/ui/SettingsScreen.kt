@@ -299,7 +299,7 @@ private fun MaskingSection() {
     NoteCard("Une règle reconnaît le passage même si un nombre change (« 10 chapitres d'avance » / « 12 chapitres d'avance ») ou si quelques mots diffèrent. Les notes d'auteur sur plusieurs paragraphes, en début ou en fin de chapitre, sont masquées en entier.")
     SectionTitle("Vos règles")
     val rules = Masking.rules()
-    if (rules.isEmpty()) Text("Dans le lecteur, faites un appui long sur un passage puis « Masquer ce genre de passage ».",
+    if (rules.isEmpty()) Text("Dans le navigateur, faites un appui long sur une phrase puis « Masquer ». Pour réafficher un passage : supprimez sa règle ici, ou menu du navigateur › « Passages masqués ».",
         Modifier.padding(horizontal = 16.dp), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     rules.forEach { r ->
         val target = when (r.scope) {
@@ -307,7 +307,7 @@ private fun MaskingSection() {
             Masking.Scope.FIC -> "Fic : " + (Library.get(r.target)?.title ?: r.target)
             Masking.Scope.AUTHOR -> "Auteur : " + JunkFilter.authorLabel(r.target)
         }
-        SettingRow("« ${r.phrase.take(90)} »", target) { IconButton(onClick = { Masking.remove(r) }) { Icon(Icons.Outlined.Delete, "Supprimer") } }
+        SettingRow("« ${r.phrase.take(90)} »", target) { IconButton(onClick = { Masking.remove(r); Toast.show("Règle supprimée : le passage s'affiche de nouveau.") }) { Icon(Icons.Outlined.Delete, "Supprimer la règle") } }
     }
 }
 

@@ -186,6 +186,8 @@ class Tab(val id: Long, initialUrl: String, val private: Boolean = false) {
     var icon by mutableStateOf<androidx.compose.ui.graphics.ImageBitmap?>(null)
     /** Page affichée en mode lecture. */
     var readerMode by mutableStateOf(false)
+    /** Dernière règle de masquage créée sur cet onglet (pour « Annuler »). */
+    var lastMasked by mutableStateOf<Masking.Rule?>(null)
     /** Page mise en mode lecture à la main (même si ce n'est pas un chapitre reconnu). */
     var readerUrl: String? = null
     val isStart: Boolean get() = url.isBlank()
@@ -692,6 +694,7 @@ fun BrowserHome() {
                 }
                 if (h.findOpen) FindBar(t)
                 SelectionBar(t)
+                if (t.selection == null) MaskUndoBar(t)
                 if (h.picking) PickerBar()
                 if (showBars) PrivateTint(t.private) { BottomToolbar(t, onMenu = { menu = true }) }
                 else Spacer(Modifier.fillMaxWidth().navigationBarsPadding())
@@ -702,7 +705,9 @@ fun BrowserHome() {
     var bookmarkDialog by remember { mutableStateOf(false) }
     var readerStyle by remember { mutableStateOf(false) }
     var claudeFic by remember { mutableStateOf<String?>(null) }
-    if (menu) BrowserMenu(t, context, onBookmark = { bookmarkDialog = true }, onReaderStyle = { readerStyle = true }, onClaude = { claudeFic = it }) { menu = false }
+    var maskedSheet by remember { mutableStateOf(false) }
+    if (menu) BrowserMenu(t, context, onBookmark = { bookmarkDialog = true }, onReaderStyle = { readerStyle = true }, onClaude = { claudeFic = it }, onMasked = { maskedSheet = true }) { menu = false }
+    if (maskedSheet) MaskedSheet(t) { maskedSheet = false }
     claudeFic?.let { id -> Library.get(id)?.let { f -> ClaudeSheet(f) { claudeFic = null } } ?: run { claudeFic = null } }
     if (bookmarkDialog) BookmarkDialog(t.title.ifBlank { t.url }, t.url) { bookmarkDialog = false }
     if (readerStyle) ReaderStyleSheet(t) { readerStyle = false }
@@ -876,6 +881,20 @@ private fun BottomToolbar(t: Tab, onMenu: () -> Unit) {
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
+private fun MaskUndoBar(t: Tab) {
+    val rule = t.lastMasked ?: return
+    LaunchedEffect(rule) { kotlinx.coroutines.delay(9000); if (t.lastMasked == rule) t.lastMasked = null }
+    Surface(color = MaterialTheme.colorScheme.inverseSurface, contentColor = MaterialTheme.colorScheme.inverseOnSurface, shadowElevation = 6.dp,
+        shape = RoundedCornerShape(14.dp), modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)) {
+        Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text("Passage masqué, ici et dans les chapitres suivants.", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f).padding(vertical = 12.dp))
+            TextButton(onClick = { Masking.remove(rule); t.lastMasked = null; t.web?.reload() },
+                colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.inversePrimary)) { Text("Annuler") }
+        }
+    }
+}
+
+@Composable
 private fun SelectionBar(t: Tab) {
     val sel = t.selection ?: return
     val context = LocalContext.current
@@ -884,7 +903,7 @@ private fun SelectionBar(t: Tab) {
     var scope by remember(sel) { mutableStateOf(if (info != null) Masking.Scope.FIC else Masking.Scope.ALL) }
     Surface(color = MaterialTheme.colorScheme.surfaceContainerHigh, shadowElevation = 6.dp) {
         Column(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp)) {
-            Text("« ${sel.second.take(140)}${if (sel.second.length > 140) "…" else ""} »", style = MaterialTheme.typography.bodySmall, maxLines = 2,
+            Text("Masquer : « ${sel.second.take(140)}${if (sel.second.length > 140) "…" else ""} »", style = MaterialTheme.typography.bodySmall, maxLines = 3,
                 overflow = TextOverflow.Ellipsis, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(Modifier.height(6.dp))
             FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -894,13 +913,14 @@ private fun SelectionBar(t: Tab) {
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Button(onClick = {
-                    val phrase = (if (sel.first.length >= 40) sel.first else sel.second).take(400)
+                    // La phrase touchée (ou la sélection si elle est plus longue), jamais tout le bloc.
+                    val phrase = (if (sel.first.length > sel.second.length) sel.first else sel.second).take(400)
                     val target = fic ?: info?.let { Fic(id = it.ficId, site = it.site, storyId = it.storyId, url = "", title = "") }
                         ?: Fic(id = "", site = Site.OTHER, storyId = "", url = "", title = "")
                     val s = if (scope == Masking.Scope.AUTHOR && fic == null) Masking.Scope.FIC else scope
-                    Masking.add(phrase, s, target)
+                    val rule = Masking.add(phrase, s, target)
                     t.web?.evaluateJavascript(PageMask.hideNowJs(phrase), null)
-                    Toast.show("Passage masqué, ici et dans les chapitres suivants (Réglages › Passages masqués pour l'annuler).")
+                    t.lastMasked = rule
                     t.selection = null
                 }) { Icon(Icons.Outlined.VisibilityOff, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text("Masquer") }
                 Spacer(Modifier.width(8.dp))
@@ -975,7 +995,7 @@ fun MenuTile(icon: ImageVector, label: String, active: Boolean = false, enabled:
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
-private fun BrowserMenu(t: Tab, context: Context, onBookmark: () -> Unit, onReaderStyle: () -> Unit, onClaude: (String) -> Unit, onClose: () -> Unit) {
+private fun BrowserMenu(t: Tab, context: Context, onBookmark: () -> Unit, onReaderStyle: () -> Unit, onClaude: (String) -> Unit, onMasked: () -> Unit, onClose: () -> Unit) {
     val h = BrowserHolder
     val info = h.ficInfo(t.url)
     val inLib = info != null && Library.contains(info.ficId)
@@ -1023,6 +1043,7 @@ private fun BrowserMenu(t: Tab, context: Context, onBookmark: () -> Unit, onRead
                 MenuTile(Icons.Outlined.DesktopWindows, "Version ordinateur", active = t.desktop, enabled = !t.isStart) { onClose(); h.setDesktop(t, !t.desktop) }
                 MenuTile(Icons.Outlined.FindInPage, "Rechercher dans la page", enabled = !t.isStart) { onClose(); h.findOpen = true }
                 MenuTile(Icons.Outlined.TouchApp, "Masquer un élément", enabled = !t.isStart) { onClose(); h.startPicker() }
+                MenuTile(Icons.Outlined.Visibility, "Passages masqués", enabled = !t.isStart) { onClose(); onMasked() }
                 val adOn = !t.isStart && AdBlocker.enabledOn(t.url)
                 MenuTile(Icons.Outlined.Shield, if (adOn) "Bloqueur actif" else "Bloqueur coupé ici", active = adOn, enabled = !t.isStart) {
                     onClose()

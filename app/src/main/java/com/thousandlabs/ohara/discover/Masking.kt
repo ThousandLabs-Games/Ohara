@@ -39,6 +39,18 @@ object Masking {
     /** Garder un petit repère « passage masqué » à la place (sinon le passage disparaît complètement). */
     var showMarker: Boolean get() = Prefs.getBool("mask_marker", false); set(v) = Prefs.putBool("mask_marker", v)
 
+    /**
+     * Correctif : avant la v1.38, un appui long sur un seul mot pouvait enregistrer comme règle le début de tout le chapitre
+     * (300 caractères). Ces règles trop longues sont retirées une fois.
+     */
+    fun repairOnce() {
+        if (Prefs.getBool("mask_fix_138", false)) return
+        Prefs.putBool("mask_fix_138", true)
+        val all = rules()
+        val kept = all.filter { it.phrase.length < 280 }
+        if (kept.size != all.size) save(kept)
+    }
+
     fun rules(): List<Rule> = runCatching {
         val a = JSONArray(Prefs.getString("mask_rules", "[]"))
         List(a.length()) { Rule.fromJson(a.getJSONObject(it)) }
@@ -46,11 +58,13 @@ object Masking {
 
     private fun save(list: List<Rule>) = Prefs.putString("mask_rules", JSONArray().also { a -> list.forEach { a.put(it.toJson()) } }.toString())
 
-    fun add(phrase: String, scope: Scope, fic: Fic) {
+    fun add(phrase: String, scope: Scope, fic: Fic): Rule? {
         val p = normalize(phrase).take(300)
-        if (p.length < 4) return
+        if (p.length < 4) return null
         val target = when (scope) { Scope.FIC -> fic.id; Scope.AUTHOR -> authorKey(fic); Scope.ALL -> "" }
-        save(rules().filterNot { it.phrase == p && it.scope == scope && it.target == target } + Rule(p, scope, target))
+        val r = Rule(p, scope, target)
+        save(rules().filterNot { it.phrase == p && it.scope == scope && it.target == target } + r)
+        return r
     }
 
     fun remove(rule: Rule) = save(rules().filterNot { it.phrase == rule.phrase && it.scope == rule.scope && it.target == rule.target })
@@ -66,6 +80,8 @@ object Masking {
 
     /** Le paragraphe correspond-il à la règle ? Texte contenu, ou au moins 75 % des mots de la règle présents. */
     private fun matches(n: String, phrase: String): Boolean {
+        // Le passage doit avoir à peu près la taille de la règle : une phrase ne fait jamais masquer tout un chapitre.
+        if (phrase.isEmpty() || n.length > maxOf(phrase.length * 2.5, phrase.length + 160.0)) return false
         if (n.contains(phrase)) return true
         val pw = words(phrase)
         if (pw.size < 4) return false
