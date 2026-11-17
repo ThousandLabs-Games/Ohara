@@ -18,7 +18,9 @@ sealed class Screen {
     data object Home : Screen()
     /** Fiche d'une fic ; [preview] sert pour un résultat de recherche pas encore dans la bibliothèque. */
     data class FicDetail(val ficId: String, val preview: Fic? = null) : Screen()
-    data class Reader(val ficId: String, val chapter: Int? = null) : Screen()
+    data object Library : Screen()
+    data object Discover : Screen()
+    data object SettingsMain : Screen()
     data class Results(val query: SearchQuery) : Screen()
     data class Similar(val fic: Fic) : Screen()
     data object Add : Screen()
@@ -34,7 +36,6 @@ sealed class Screen {
 
 object Nav {
     val stack = mutableStateListOf<Screen>(Screen.Home)
-    var tab by mutableIntStateOf(0)
 
     const val TAB_LIBRARY = 0
     const val TAB_DISCOVER = 1
@@ -44,7 +45,6 @@ object Nav {
     val top: Screen get() = stack.last()
 
     fun push(s: Screen) {
-        // pas deux fois le même écran à la suite
         if (stack.lastOrNull() == s) return
         stack.add(s)
     }
@@ -59,14 +59,33 @@ object Nav {
         if (stack.size > 1) stack[stack.lastIndex] = s else stack.add(s)
     }
 
-    fun home(tab: Int) {
+    /** Revient au navigateur ; avec un onglet autre que le navigateur, ouvre cet écran par-dessus. */
+    fun home(tab: Int = TAB_BROWSER) {
         while (stack.size > 1) stack.removeAt(stack.lastIndex)
-        this.tab = tab
+        when (tab) {
+            TAB_LIBRARY -> stack.add(Screen.Library)
+            TAB_DISCOVER -> stack.add(Screen.Discover)
+            TAB_SETTINGS -> stack.add(Screen.SettingsMain)
+        }
     }
 
-    fun openBrowser(url: String) {
-        BrowserHolder.pendingUrl = url
+    /** Ouvre une adresse dans le navigateur (onglet actuel s'il est vide, sinon un nouvel onglet). */
+    fun openBrowser(url: String, newTab: Boolean = true) {
         home(TAB_BROWSER)
+        BrowserHolder.openUrl(url, newTab)
+    }
+
+    /** Ouvre une fic de la bibliothèque dans le navigateur, là où vous vous êtes arrêté (ou au chapitre demandé). */
+    fun openFic(ficId: String, chapter: Int? = null) {
+        val f = com.thousandlabs.ohara.data.Library.get(ficId) ?: return
+        val src = com.thousandlabs.ohara.sources.Sources.of(f.site)
+        val url = when {
+            chapter != null -> f.chapters.getOrNull(chapter)?.url ?: src.chapterUrl(f, chapter)
+            f.resumeUrl.isNotBlank() -> f.resumeUrl
+            else -> f.chapters.getOrNull(f.progressChapter)?.url ?: runCatching { src.chapterUrl(f, f.progressChapter) }.getOrDefault(f.url)
+        }
+        com.thousandlabs.ohara.data.Library.update(ficId) { it.copy(lastOpened = System.currentTimeMillis(), newChapters = 0, completedAlert = false) }
+        openBrowser(url.ifBlank { f.url })
     }
 }
 

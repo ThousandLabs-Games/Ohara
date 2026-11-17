@@ -20,6 +20,7 @@ class OharaApp : Application() {
         Library.init(this)
         HiddenLog.init(Library.dataDir())
         com.thousandlabs.ohara.data.History.init(Library.dataDir())
+        com.thousandlabs.ohara.ui.ReadTracker.init(Library.dataDir())
         FandomIndex.init(Library.dataDir())
         Discover.init(Library.dataDir())
         Http.init(this)

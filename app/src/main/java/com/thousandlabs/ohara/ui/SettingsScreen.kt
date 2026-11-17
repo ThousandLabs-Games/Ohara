@@ -27,6 +27,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.HelpOutline
 import androidx.compose.material.icons.automirrored.outlined.MenuBook
 import androidx.compose.material.icons.automirrored.outlined.OpenInNew
@@ -108,9 +109,9 @@ fun SettingsTab() {
     @Suppress("UNUSED_EXPRESSION") pv
     var taps by remember { mutableIntStateOf(0) }
     Scaffold(
-        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
-            TopAppBar(title = { Text("Réglages", style = MaterialTheme.typography.titleLarge.merge(SerifTitle)) },
+            TopAppBar(navigationIcon = { IconButton(onClick = { Nav.pop() }) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, "Retour") } },
+                title = { Text("Réglages", style = MaterialTheme.typography.titleLarge.merge(SerifTitle)) },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background))
         }
     ) { pad ->
@@ -120,14 +121,13 @@ fun SettingsTab() {
             })
             SectionTitle("Lecture et apparence")
             SettingRow("Apparence", "Thème, couleur, icône de l'appli", Icons.Outlined.Palette, onClick = { Nav.push(Screen.Settings("apparence")) })
-            SettingRow("Lecteur", "Police, taille, interligne, thèmes, lecture continue", Icons.AutoMirrored.Outlined.MenuBook, onClick = { Nav.push(Screen.Settings("lecture")) })
             SectionTitle("Découverte")
             SettingRow("Filtre anti-déchets", "Harem, fics « react », fics chinoises récentes, genres et auteurs", Icons.Outlined.FilterAlt, onClick = { Nav.push(Screen.Settings("filtre")) })
             SettingRow("Fics masquées", "Dossier « Masquées » et liste blanche", Icons.Outlined.VisibilityOff, onClick = { Nav.push(Screen.Hidden) })
             SettingRow("Passages masqués", "Promos Patreon, notes d'auteur, règles personnelles", Icons.Outlined.Block, onClick = { Nav.push(Screen.Settings("masquage")) })
             SettingRow("Score « Prometteuse »", "Voir et régler les critères", Icons.AutoMirrored.Outlined.TrendingUp, onClick = { Nav.push(Screen.Settings("score")) })
             SectionTitle("Bibliothèque")
-            SettingRow("Téléchargements et nouveaux chapitres", "Vitesse, vérification quotidienne, Pack Claude", Icons.Outlined.Download, onClick = { Nav.push(Screen.Settings("telechargement")) })
+            SettingRow("Bibliothèque automatique et téléchargements", "Ajout après ${Fmt.number(ReadTracker.threshold.toLong())} mots lus, chapitres gardés, nouveaux chapitres", Icons.Outlined.Download, onClick = { Nav.push(Screen.Settings("telechargement")) })
             SettingRow("Sauvegarde et restauration", "Toute la bibliothèque dans un seul fichier", Icons.Outlined.Backup, onClick = { Nav.push(Screen.Settings("sauvegarde")) })
             SettingRow("Statistiques de lecture", null, Icons.Outlined.BarChart, onClick = { Nav.push(Screen.Stats) })
             SettingRow("Sites ajoutés", "${Fmt.plural(GenericSource.domains().size, "site")} en plus des trois sites principaux", Icons.Outlined.AddLink, onClick = { Nav.push(Screen.Settings("sources")) })
@@ -159,7 +159,7 @@ fun SettingsDetailScreen(section: String) {
     val pv by Prefs.version.collectAsState()
     @Suppress("UNUSED_EXPRESSION") pv
     val title = when (section) {
-        "apparence" -> "Apparence"; "lecture" -> "Lecteur"; "filtre" -> "Filtre anti-déchets"; "masquage" -> "Passages masqués"
+        "apparence" -> "Apparence"; "filtre" -> "Filtre anti-déchets"; "masquage" -> "Passages masqués"
         "telechargement" -> "Téléchargements"; "confidentialite" -> "Bloqueur et anti-pistage"; "sauvegarde" -> "Sauvegarde"
         "sources" -> "Sites ajoutés"; "maj" -> "Mises à jour"; "avance" -> "Navigation libre"; "score" -> "Score « Prometteuse »"; else -> "Réglages"
     }
@@ -167,7 +167,6 @@ fun SettingsDetailScreen(section: String) {
         Column(Modifier.fillMaxSize().padding(pad).verticalScroll(rememberScrollState()).padding(bottom = 48.dp)) {
             when (section) {
                 "apparence" -> AppearanceSection()
-                "lecture" -> ReaderSettings()
                 "filtre" -> FilterSection()
                 "masquage" -> MaskingSection()
                 "telechargement" -> DownloadSection()
@@ -298,8 +297,13 @@ private fun MaskingSection() {
 private fun DownloadSection() {
     val context = LocalContext.current
     var confirm by remember { mutableStateOf(false) }
+    SectionTitle("Bibliothèque automatique")
+    SliderRow("Ajouter une fic après", ReadTracker.threshold.toFloat(), 2_000f..50_000f, 47, { "${Fmt.number(it.toLong() / 1000 * 1000)} mots lus" }) { ReadTracker.threshold = (it / 1000).toInt() * 1000 }
+    Text("Un chapitre compte comme lu quand vous en avez parcouru 60 %. Le compte se fait fic par fic, quel que soit le nombre de chapitres. Le menu du navigateur permet aussi d'ajouter une fic tout de suite.",
+        Modifier.padding(horizontal = 16.dp), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    SwitchRow("Garder les chapitres lus", "Chaque chapitre lu d'une fic de la bibliothèque est gardé : relisez-le sans connexion dans « Téléchargements »", ReadTracker.keepRead) { ReadTracker.keepRead = it }
+    SectionTitle("Téléchargements")
     SwitchRow("Vitesse douce", "Pauses plus longues entre deux chapitres : moins de risque d'être bloqué", Prefs.gentleSpeed) { Prefs.gentleSpeed = it }
-    SwitchRow("Ajouter les fics lues dans le navigateur", "Remplace l'historique : la fic arrive dans « En cours », au bon chapitre", Prefs.autoAddVisited) { Prefs.autoAddVisited = it }
     SectionTitle("Nouveaux chapitres")
     SwitchRow("Vérifier chaque jour", "En arrière-plan, avec une notification", Prefs.checkDaily) { Prefs.checkDaily = it; UpdateChecker.schedule(context.applicationContext) }
     SwitchRow("Vérifier à l'ouverture", null, Prefs.checkOnLaunch) { Prefs.checkOnLaunch = it }

@@ -55,6 +55,14 @@ import com.thousandlabs.ohara.discover.JunkFilter
 import com.thousandlabs.ohara.privacy.AdBlocker
 import java.util.Calendar
 
+/** Vitesse de lecture mesurée (mots par minute), 230 par défaut tant qu'il n'y a pas assez de mesures. */
+fun readingSpeed(): Int {
+    val days = ReadingLog.snapshot().values
+    val words = days.sumOf { it[0] }
+    val secs = days.sumOf { it[1] }
+    return if (secs > 900 && words > 2000) (words * 60 / secs).toInt().coerceIn(120, 700) else 230
+}
+
 // ---------- Dossier « Masquées » ----------
 
 @Composable

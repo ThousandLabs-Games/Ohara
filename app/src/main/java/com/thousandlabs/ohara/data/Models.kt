@@ -114,6 +114,8 @@ data class Fic(
     val shelves: Set<String> = emptySet(),
     val addedAt: Long = 0,
     val lastOpened: Long = 0,
+    /** Adresse exacte de la dernière page lue dans le navigateur (pour reprendre au bon endroit). */
+    val resumeUrl: String = "",
     val progressChapter: Int = 0,
     val progressPos: Float = 0f,
     val maxChapterRead: Int = -1,
@@ -145,7 +147,7 @@ data class Fic(
         put("pub", published); put("upd", updated); put("favs", favs); put("follows", follows)
         put("reviews", reviews); put("likes", likes); put("views", views); put("replies", replies)
         put("cover", cover); put("xover", crossover); if (fandomUrl.isNotEmpty()) put("fUrl", fandomUrl)
-        put("shelves", JSONArray(shelves.toList())); put("added", addedAt); put("opened", lastOpened)
+        put("shelves", JSONArray(shelves.toList())); put("added", addedAt); put("opened", lastOpened); if (resumeUrl.isNotEmpty()) put("rUrl", resumeUrl)
         put("pCh", progressChapter); put("pPos", progressPos.toDouble()); put("maxRead", maxChapterRead)
         put("note", note); put("comment", comment); put("abandon", abandonReason)
         put("charNotes", JSONArray().also { a -> characterNotes.forEach { a.put(it.toJson()) } })
@@ -173,7 +175,7 @@ data class Fic(
             views = o.optInt("views"), replies = o.optInt("replies"), cover = o.optString("cover"),
             crossover = o.optBoolean("xover"), fandomUrl = o.optString("fUrl"),
             shelves = o.optJSONArray("shelves").strings().toSet(), addedAt = o.optLong("added"),
-            lastOpened = o.optLong("opened"), progressChapter = o.optInt("pCh"),
+            lastOpened = o.optLong("opened"), resumeUrl = o.optString("rUrl"), progressChapter = o.optInt("pCh"),
             progressPos = o.optDouble("pPos", 0.0).toFloat(), maxChapterRead = o.optInt("maxRead", -1),
             note = o.optInt("note", -1), comment = o.optString("comment"), abandonReason = o.optString("abandon"),
             characterNotes = o.optJSONArray("charNotes")?.let { a -> List(a.length()) { CharacterNote.fromJson(a.getJSONObject(it)) } } ?: emptyList(),

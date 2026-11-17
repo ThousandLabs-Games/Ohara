@@ -23,7 +23,6 @@ import com.thousandlabs.ohara.ui.AppScope
 import com.thousandlabs.ohara.ui.Locker
 import com.thousandlabs.ohara.ui.Nav
 import com.thousandlabs.ohara.ui.OharaRoot
-import com.thousandlabs.ohara.ui.ReaderKeys
 import com.thousandlabs.ohara.ui.Screen
 import com.thousandlabs.ohara.ui.Toast
 import com.thousandlabs.ohara.update.AppUpdater
@@ -61,7 +60,7 @@ class MainActivity : FragmentActivity() {
     private fun handleIntent(intent: Intent?) {
         intent ?: return
         when (intent.getStringExtra("ouvrir")) {
-            "file" -> { Nav.home(Nav.TAB_LIBRARY); Nav.push(Screen.Downloads); return }
+            "file" -> { Nav.home(); Nav.push(Screen.Downloads); return }
             "bibliotheque" -> { Nav.home(Nav.TAB_LIBRARY); return }
         }
         val text = when (intent.action) {
@@ -89,6 +88,7 @@ class MainActivity : FragmentActivity() {
         Locker.onStop()
         AdBlocker.flushCount()
         Library.saveNow()
+        com.thousandlabs.ohara.ui.BrowserHolder.saveTabs()
     }
 
     override fun onDestroy() {
@@ -97,15 +97,6 @@ class MainActivity : FragmentActivity() {
         // l'icône ne change que quand l'appli est vraiment fermée (sinon Android ferme la tâche en cours)
         if (isFinishing) IconSwitcher.apply(applicationContext)
         super.onDestroy()
-    }
-
-    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
-        val h = ReaderKeys.handler
-        if (h != null && Prefs.volumeKeys && (event.keyCode == KeyEvent.KEYCODE_VOLUME_DOWN || event.keyCode == KeyEvent.KEYCODE_VOLUME_UP)) {
-            if (event.action == KeyEvent.ACTION_DOWN) h(event.keyCode == KeyEvent.KEYCODE_VOLUME_DOWN)
-            return true
-        }
-        return super.dispatchKeyEvent(event)
     }
 
     fun keepScreenOn(on: Boolean) {

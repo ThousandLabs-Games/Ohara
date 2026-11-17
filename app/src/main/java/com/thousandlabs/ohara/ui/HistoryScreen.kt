@@ -68,7 +68,7 @@ fun openHistory(e: History.Entry) {
         t.startsWith("fic:") -> {
             val id = t.removePrefix("fic:").substringBeforeLast('#')
             val ch = t.substringAfterLast('#', "").toIntOrNull()
-            if (com.thousandlabs.ohara.data.Library.contains(id)) Nav.push(Screen.Reader(id, ch)) else Toast.show("Cette fic n'est plus dans la bibliothèque.")
+            if (com.thousandlabs.ohara.data.Library.contains(id)) Nav.openFic(id, ch) else Toast.show("Cette fic n'est plus dans la bibliothèque.")
         }
         else -> Nav.openBrowser(t)
     }

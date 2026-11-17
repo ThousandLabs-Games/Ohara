@@ -22,6 +22,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.Sort
 import androidx.compose.material.icons.automirrored.outlined.TrendingUp
 import androidx.compose.material.icons.outlined.AutoAwesome
@@ -91,10 +92,10 @@ import org.json.JSONObject
 fun DiscoverTab() {
     var tab by rememberSaveable { mutableStateOf(0) }
     Scaffold(
-        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
             Column {
                 TopAppBar(
+                    navigationIcon = { IconButton(onClick = { Nav.pop() }) { Icon(androidx.compose.material.icons.Icons.AutoMirrored.Outlined.ArrowBack, "Retour") } },
                     title = { Text("Découvrir", style = MaterialTheme.typography.titleLarge.merge(SerifTitle)) },
                     actions = {
                         IconButton(onClick = { Nav.push(Screen.Hidden) }) { Icon(Icons.Outlined.VisibilityOff, "Fics masquées par le filtre") }

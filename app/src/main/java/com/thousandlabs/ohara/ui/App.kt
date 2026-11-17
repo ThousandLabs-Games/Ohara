@@ -60,8 +60,6 @@ object Locker {
     fun unlock() { activity?.authenticate { locked = false } }
 }
 
-/** Touches de volume dans le lecteur (true = volume bas = avancer). */
-object ReaderKeys { var handler: ((Boolean) -> Unit)? = null }
 
 @Composable
 fun OharaRoot() {
@@ -71,7 +69,6 @@ fun OharaRoot() {
         val holder = rememberSaveableStateHolder()
         Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
             Box(Modifier.fillMaxSize()) {
-                BackHandler(enabled = Nav.stack.size == 1 && Nav.tab != Nav.TAB_LIBRARY) { Nav.tab = Nav.TAB_LIBRARY }
                 BackHandler(enabled = Nav.stack.size > 1) { Nav.pop() }
                 val depth = Nav.stack.size
                 androidx.compose.animation.AnimatedContent(
@@ -86,9 +83,11 @@ fun OharaRoot() {
                 ) { (s, d) ->
                 holder.SaveableStateProvider(s.toString().take(300) + "#" + d) {
                     when (s) {
-                        Screen.Home -> HomeScreen()
+                        Screen.Home -> BrowserHome()
+                        Screen.Library -> LibraryTab()
+                        Screen.Discover -> DiscoverTab()
+                        Screen.SettingsMain -> SettingsTab()
                         is Screen.FicDetail -> FicScreen(s.ficId, s.preview)
-                        is Screen.Reader -> ReaderScreen(s.ficId, s.chapter)
                         is Screen.Results -> ResultsScreen(s.query)
                         is Screen.Similar -> SimilarScreen(s.fic)
                         Screen.Add -> AddScreen()
@@ -105,42 +104,6 @@ fun OharaRoot() {
                 }
                 SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = 80.dp))
                 if (Locker.locked) LockScreen()
-            }
-        }
-    }
-}
-
-@Composable
-private fun HomeScreen() {
-    val holder = rememberSaveableStateHolder()
-    LaunchedEffect(Unit) { Discover.refreshIfStale() }
-    androidx.compose.material3.Scaffold(
-        contentWindowInsets = androidx.compose.foundation.layout.WindowInsets(0, 0, 0, 0),
-        bottomBar = {
-            NavigationBar(containerColor = MaterialTheme.colorScheme.surfaceContainer) {
-                val items = listOf(
-                    Triple("Bibliothèque", Icons.Outlined.LocalLibrary, Nav.TAB_LIBRARY),
-                    Triple("Découvrir", Icons.Outlined.Explore, Nav.TAB_DISCOVER),
-                    Triple("Navigateur", Icons.Outlined.Public, Nav.TAB_BROWSER),
-                    Triple("Réglages", Icons.Outlined.Settings, Nav.TAB_SETTINGS)
-                )
-                for ((label, icon, tab) in items) NavigationBarItem(
-                    selected = Nav.tab == tab,
-                    onClick = { Nav.tab = tab },
-                    icon = { Icon(icon, contentDescription = label) },
-                    label = { Text(label) }
-                )
-            }
-        }
-    ) { pad ->
-        Box(Modifier.fillMaxSize().padding(pad)) {
-            holder.SaveableStateProvider("onglet${Nav.tab}") {
-                when (Nav.tab) {
-                    Nav.TAB_LIBRARY -> LibraryTab()
-                    Nav.TAB_DISCOVER -> DiscoverTab()
-                    Nav.TAB_BROWSER -> BrowserTab()
-                    else -> SettingsTab()
-                }
             }
         }
     }

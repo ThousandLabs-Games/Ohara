@@ -208,7 +208,7 @@ fun FicScreen(ficId: String, preview: Fic?) {
                     Button(onClick = {
                         val f = ensureInLibrary(Shelves.READING)
                         Library.update(f.id) { it.copy(shelves = it.shelves + Shelves.READING - Shelves.TO_READ) }
-                        Nav.push(Screen.Reader(f.id, null))
+                        Nav.openFic(f.id)
                     }, modifier = Modifier.weight(1f)) {
                         Icon(Icons.AutoMirrored.Outlined.MenuBook, null); Spacer(Modifier.width(8.dp))
                         Text(if (started) "Reprendre ch. ${inLib!!.progressChapter + 1}" else "Lire")
@@ -318,7 +318,7 @@ fun FicScreen(ficId: String, preview: Fic?) {
                 if (inLib.highlights.isNotEmpty()) item {
                     SectionTitle("Surlignages (${inLib.highlights.size})")
                     inLib.highlights.sortedWith(compareBy({ it.chapter }, { it.createdAt })).forEach { h ->
-                        Row(Modifier.fillMaxWidth().clickable { Nav.push(Screen.Reader(fic.id, h.chapter)) }.padding(horizontal = 16.dp, vertical = 8.dp)) {
+                        Row(Modifier.fillMaxWidth().clickable { Nav.openFic(fic.id, h.chapter) }.padding(horizontal = 16.dp, vertical = 8.dp)) {
                             Icon(Icons.Outlined.Highlight, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
                             Spacer(Modifier.width(10.dp))
                             Column(Modifier.weight(1f)) {
@@ -341,7 +341,7 @@ fun FicScreen(ficId: String, preview: Fic?) {
                     val here = inLib != null && idx == inLib.progressChapter
                     Row(Modifier.fillMaxWidth().clickable {
                         val f = ensureInLibrary(Shelves.READING)
-                        Nav.push(Screen.Reader(f.id, idx))
+                        if (Library.hasChapter(f.id, idx)) BrowserHolder.openOffline(f.id, idx) else Nav.openFic(f.id, idx)
                     }.padding(horizontal = 16.dp, vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
                         Text("${idx + 1}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline, modifier = Modifier.width(36.dp))
                         Text(c.title, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f), maxLines = 1,

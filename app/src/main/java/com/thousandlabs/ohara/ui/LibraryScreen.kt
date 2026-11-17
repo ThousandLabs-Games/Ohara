@@ -15,6 +15,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.HelpOutline
 import androidx.compose.material.icons.automirrored.outlined.Sort
 import androidx.compose.material.icons.outlined.Add
@@ -144,7 +145,6 @@ fun LibraryTab() {
     val newCount = fics.count { it.newChapters > 0 || it.completedAlert }
 
     Scaffold(
-        contentWindowInsets = androidx.compose.foundation.layout.WindowInsets(0, 0, 0, 0),
         topBar = {
             if (selection.isNotEmpty()) {
                 TopAppBar(
@@ -179,6 +179,7 @@ fun LibraryTab() {
                 )
             } else {
                 TopAppBar(
+                    navigationIcon = { IconButton(onClick = { Nav.pop() }) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, "Retour au navigateur") } },
                     title = {
                         if (searching) OutlinedTextField(
                             value = query, onValueChange = { query = it }, singleLine = true,
@@ -269,10 +270,10 @@ fun LibraryTab() {
             }
             if (fics.isEmpty()) {
                 EmptyState(Icons.Outlined.LocalLibrary, "Votre bibliothèque est vide",
-                    "Collez un lien copié depuis Brave, partagez une fic vers Ohara, ou ouvrez un site dans le navigateur intégré.") {
+                    "Lisez une fic dans le navigateur : elle arrive ici toute seule après ${Fmt.number(ReadTracker.threshold.toLong())} mots lus. Vous pouvez aussi l'ajouter tout de suite depuis le menu du navigateur.") {
                     OutlinedButton(onClick = { Nav.push(Screen.Add) }) { Icon(Icons.Outlined.ContentPaste, null); Spacer(Modifier.width(8.dp)); Text("Coller un lien") }
                     Spacer(Modifier.height(8.dp))
-                    OutlinedButton(onClick = { Nav.tab = Nav.TAB_BROWSER }) { Icon(Icons.Outlined.Public, null); Spacer(Modifier.width(8.dp)); Text("Ouvrir le navigateur") }
+                    OutlinedButton(onClick = { Nav.home() }) { Icon(Icons.Outlined.Public, null); Spacer(Modifier.width(8.dp)); Text("Ouvrir le navigateur") }
                 }
             } else if (shown.isEmpty()) {
                 EmptyState(Icons.Outlined.Search, "Aucune fic ici", "Changez d'étagère ou de filtre.")
@@ -358,52 +359,93 @@ fun DuplicatesScreen() {
 @Composable
 fun DownloadsScreen() {
     val jobs by Downloads.jobs.collectAsState()
+    val fics by Library.fics.collectAsState()
+    val dv by Library.downloadVersion.collectAsState()
+    var open by remember { mutableStateOf<String?>(null) }
+    val kept = remember(fics, dv) { fics.filter { Library.downloadedCount(it.id) > 0 }.sortedByDescending { it.lastOpened } }
     Scaffold(topBar = {
-        BackTopBar("File de téléchargement", if (jobs.isEmpty()) null else Fmt.plural(jobs.size, "fic")) {
+        BackTopBar("Téléchargements", "${Fmt.plural(kept.size, "fic")} sur le téléphone") {
             if (jobs.any { it.state == DownloadJob.State.ERROR }) TextButton(onClick = { Downloads.clearFinishedErrors() }) { Text("Effacer les erreurs") }
         }
     }) { pad ->
-        if (jobs.isEmpty()) {
-            EmptyState(Icons.Outlined.Download, "Rien en cours", "Les chapitres se téléchargent un par un, avec des pauses pour ne pas être bloqué par les sites. Le téléchargement continue écran éteint.", Modifier.padding(pad))
-            return@Scaffold
-        }
         LazyColumn(Modifier.padding(pad), contentPadding = ListPadding) {
-            if (jobs.any { it.state == DownloadJob.State.VERIFY }) item {
-                NoteCard("Le site demande de confirmer que vous n'êtes pas un robot. Touchez « Vérifier », cochez la case sur la page, puis revenez : le téléchargement reprendra.", icon = Icons.Outlined.ErrorOutline)
-            }
-            items(jobs, key = { it.ficId }) { j ->
-                Column(Modifier.fillMaxWidth().padding(16.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Column(Modifier.weight(1f)) {
-                            Text(j.title, style = MaterialTheme.typography.titleSmall, maxLines = 1)
-                            Text(
-                                when (j.state) {
-                                    DownloadJob.State.WAITING -> "En attente"
-                                    DownloadJob.State.RUNNING -> "${j.done}/${j.total} · ${j.message}"
-                                    DownloadJob.State.PAUSED -> "En pause"
-                                    DownloadJob.State.VERIFY -> "Vérification demandée par le site"
-                                    DownloadJob.State.ERROR -> j.message
-                                },
-                                style = MaterialTheme.typography.bodySmall, maxLines = 2,
-                                color = if (j.state == DownloadJob.State.ERROR) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        when (j.state) {
-                            DownloadJob.State.RUNNING, DownloadJob.State.WAITING -> IconButton(onClick = { Downloads.pause(j.ficId) }) { Icon(Icons.Outlined.Pause, "Pause") }
-                            DownloadJob.State.PAUSED, DownloadJob.State.ERROR -> IconButton(onClick = { Downloads.resume(j.ficId) }) { Icon(Icons.Outlined.PlayArrow, "Reprendre") }
-                            DownloadJob.State.VERIFY -> TextButton(onClick = { j.verifyUrl?.let { u -> BrowserHolder.verifying = true; Nav.openBrowser(u) } }) { Text("Vérifier") }
-                        }
-                        IconButton(onClick = { Downloads.cancel(j.ficId) }) { Icon(Icons.Outlined.Close, "Retirer de la file") }
-                    }
-                    if (j.state == DownloadJob.State.RUNNING && j.total > 0) {
-                        Spacer(Modifier.height(6.dp))
-                        LinearProgressIndicator(progress = { j.done.toFloat() / j.total }, modifier = Modifier.fillMaxWidth())
-                    }
+            if (jobs.isNotEmpty()) {
+                item { SectionTitle("En cours") }
+                if (jobs.any { it.state == DownloadJob.State.VERIFY }) item {
+                    NoteCard("Le site demande de confirmer que vous n'êtes pas un robot. Touchez « Vérifier », cochez la case sur la page, puis le téléchargement reprendra.", icon = Icons.Outlined.ErrorOutline)
                 }
-                Divider()
+                items(jobs, key = { "j" + it.ficId }) { j ->
+                    Column(Modifier.fillMaxWidth().padding(16.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Column(Modifier.weight(1f)) {
+                                Text(j.title, style = MaterialTheme.typography.titleSmall, maxLines = 1)
+                                Text(
+                                    when (j.state) {
+                                        DownloadJob.State.WAITING -> "En attente"
+                                        DownloadJob.State.RUNNING -> "${j.done}/${j.total} · ${j.message}"
+                                        DownloadJob.State.PAUSED -> "En pause"
+                                        DownloadJob.State.VERIFY -> "Vérification demandée par le site"
+                                        DownloadJob.State.ERROR -> j.message
+                                    },
+                                    style = MaterialTheme.typography.bodySmall, maxLines = 2,
+                                    color = if (j.state == DownloadJob.State.ERROR) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            when (j.state) {
+                                DownloadJob.State.RUNNING, DownloadJob.State.WAITING -> IconButton(onClick = { Downloads.pause(j.ficId) }) { Icon(Icons.Outlined.Pause, "Pause") }
+                                DownloadJob.State.PAUSED, DownloadJob.State.ERROR -> IconButton(onClick = { Downloads.resume(j.ficId) }) { Icon(Icons.Outlined.PlayArrow, "Reprendre") }
+                                DownloadJob.State.VERIFY -> TextButton(onClick = { j.verifyUrl?.let { u -> BrowserHolder.verifying = true; Nav.openBrowser(u) } }) { Text("Vérifier") }
+                            }
+                            IconButton(onClick = { Downloads.cancel(j.ficId) }) { Icon(Icons.Outlined.Close, "Retirer de la file") }
+                        }
+                        if (j.state == DownloadJob.State.RUNNING && j.total > 0) {
+                            Spacer(Modifier.height(6.dp))
+                            LinearProgressIndicator(progress = { j.done.toFloat() / j.total }, modifier = Modifier.fillMaxWidth())
+                        }
+                    }
+                    Divider()
+                }
+            }
+            item { SectionTitle("Sur le téléphone") }
+            if (kept.isEmpty()) item {
+                EmptyState(Icons.Outlined.Download, "Aucun chapitre gardé",
+                    "Les chapitres que vous lisez sont gardés pour les fics de votre bibliothèque. Pour tout télécharger : menu du navigateur › « Télécharger la fic », ou bouton « Télécharger » sur la fiche.")
+            }
+            items(kept, key = { "k" + it.id }) { f ->
+                val n = Library.downloadedCount(f.id)
+                Column {
+                    Row(Modifier.fillMaxWidth().clickable { open = if (open == f.id) null else f.id }.padding(horizontal = 16.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically) {
+                        CoverTile(f)
+                        Spacer(Modifier.width(14.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(f.title, style = MaterialTheme.typography.titleSmall, maxLines = 2)
+                            Text("$n chapitre${if (n > 1) "s" else ""} sur ${maxOf(f.totalChapters, n)} · lisibles sans connexion",
+                                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        val first = Library.downloadedSet(f.id).let { set -> if (f.progressChapter in set) f.progressChapter else set.minOrNull() }
+                        if (first != null) FilledTonalButtonCompact("Lire") { BrowserHolder.openOffline(f.id, first) }
+                    }
+                    if (open == f.id) {
+                        Library.downloadedSet(f.id).sorted().forEach { i ->
+                            Row(Modifier.fillMaxWidth().clickable { BrowserHolder.openOffline(f.id, i) }.padding(start = 78.dp, end = 16.dp, top = 8.dp, bottom = 8.dp)) {
+                                Text("${i + 1}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline, modifier = Modifier.width(36.dp))
+                                Text(f.chapters.getOrNull(i)?.title ?: "Chapitre ${i + 1}", style = MaterialTheme.typography.bodyMedium, maxLines = 1,
+                                    color = if (i == f.progressChapter) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface)
+                            }
+                        }
+                    }
+                    Divider()
+                }
             }
         }
     }
+}
+
+@Composable
+fun FilledTonalButtonCompact(label: String, onClick: () -> Unit) {
+    androidx.compose.material3.FilledTonalButton(onClick = onClick,
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 14.dp, vertical = 4.dp)) { Text(label) }
 }
 
 /** Petit utilitaire : score d'une fic de la bibliothèque (pour l'afficher sur la fiche). */
@@ -417,7 +459,7 @@ private fun ResumeCard(f: Fic) {
         color = cs.primaryContainer, shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp),
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)
     ) {
-        Row(Modifier.clickable { Nav.push(Screen.Reader(f.id, null)) }.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.clickable { Nav.openFic(f.id) }.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
             CoverTile(f, 56.dp)
             Spacer(Modifier.width(14.dp))
             Column(Modifier.weight(1f)) {
@@ -433,7 +475,7 @@ private fun ResumeCard(f: Fic) {
                 }
             }
             Spacer(Modifier.width(10.dp))
-            androidx.compose.material3.FilledIconButton(onClick = { Nav.push(Screen.Reader(f.id, null)) }) {
+            androidx.compose.material3.FilledIconButton(onClick = { Nav.openFic(f.id) }) {
                 Icon(Icons.Outlined.PlayArrow, "Reprendre")
             }
         }
