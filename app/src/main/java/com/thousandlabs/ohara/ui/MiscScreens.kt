@@ -193,7 +193,7 @@ private val GUIDE = listOf(
     "Reprendre là où vous vous êtes arrêté" to "Ohara retient la position exacte dans le chapitre. Si vous avez lu ailleurs, collez le lien du chapitre où vous êtes : la fic s'ouvre à ce chapitre et la progression est mise à jour.",
     "Télécharger tous les chapitres" to "Sur la fiche d'une fic, « Télécharger ». Les chapitres arrivent un par un avec des pauses, pour ne pas être bloqué par le site, et le téléchargement continue écran éteint. Si un site demande « Je ne suis pas un robot », une notification vous l'indique : touchez « Vérifier », cochez la case, et tout reprend.",
     "Lire confortablement" to "Dans le lecteur, touchez le milieu de l'écran pour afficher les barres, le haut ou le bas pour changer de page. Le bouton « Aa » règle la police, la taille, l'interligne, les marges, le thème (clair, sépia, sombre, noir) et la lecture continue. Le temps restant est calculé selon votre vitesse réelle.",
-    "Lire en français" to "Dans le lecteur, touchez l'icône de traduction dans la barre du haut (touchez le milieu de l'écran si la barre est cachée). Depuis le navigateur : menu (trois points) › « Lire en français dans Ohara ». La première fois, Ohara télécharge le modèle anglais-français (une trentaine de Mo) ; ensuite la traduction se fait sur le téléphone, sans connexion, et rien n'est envoyé à personne. Chaque chapitre traduit est gardé. Touchez à nouveau l'icône pour revenir au texte original.",
+    "Lire en français" to "Dans le navigateur, touchez l'icône de traduction à côté de l'adresse : toutes les pages s'affichent en français jusqu'à ce que vous la touchiez à nouveau. Le même réglage traduit aussi le lecteur (icône dans la barre du haut ; touchez le milieu de l'écran si la barre est cachée). La première fois, Ohara télécharge le modèle anglais-français (une trentaine de Mo) ; ensuite la traduction se fait sur le téléphone, sans connexion, et rien n'est envoyé à personne. Chaque chapitre traduit est gardé. Touchez à nouveau l'icône pour revenir au texte original.",
     "Surligner et prendre des notes" to "Appui long sur un mot, ajustez la sélection, puis « Surligner » ou « Note ». Les passages surlignés apparaissent sur la fiche de la fic et partent dans le Pack Claude.",
     "Masquer les promos et notes d'auteur" to "Appui long sur un passage, puis « Masquer ce genre de passage ». Choisissez une phrase repère et la portée : cette fic, cet auteur, ou toutes les fics. Les promos Patreon, Ko-fi et Discord sont déjà repliées d'office ; touchez un passage replié pour le lire quand même.",
     "Rechercher une fic précise" to "Découvrir › Recherche : site, fandom, personnages, type (self-insert, crossover, AU, fix-it, isekai, time travel, System, transmigration, OC), longueur, nombre de chapitres, statut, dates et tri. Une touche sur un type l'inclut, deux touches l'excluent.",
@@ -204,6 +204,8 @@ private val GUIDE = listOf(
     "Nouveaux chapitres" to "Ohara vérifie chaque jour vos fics en cours et vous prévient. Les badges indiquent les nouveaux chapitres, les fics enfin terminées, les fics inactives et celles supprimées du site. Les fics présentes sur FanFiction.net et SpaceBattles peuvent être fusionnées (menu › Doublons).",
     "Envoyer une fic à Claude" to "Fiche de la fic › Exporter › Pack Claude. Vous obtenez une archive avec la fiche, vos notes, les personnages, vos surlignages, des modèles de consignes (continuer la fic, écrire une nouvelle fic dans le même ton…) et le texte découpé en parties. Partagez-la directement vers l'appli Claude. EPUB et TXT sont aussi disponibles.",
     "Le navigateur intégré" to "Limité aux sites de fics, avec bloqueur de publicités et protections anti-pistage proches de Brave. Menu › « Masquer un élément » : touchez une bannière gênante, « Masquer », et elle reste masquée sur tout le site. Les fics que vous y lisez s'ajoutent toutes seules à votre bibliothèque.",
+    "Pages FanFiction.net et WebNovel" to "Ohara ouvre ces deux sites dans leur version ordinateur, la seule qu'il sait lire, puis remet la page à la largeur du téléphone. Pour voir la page telle quelle : menu (trois points) › « Afficher la page d'origine ».",
+    "Historique" to "Désactivé par défaut. Réglages › Historique : activez-le pour garder les pages visitées, les recherches et les fics ouvertes, puis retrouvez-les par jour, par type ou par mot. Tout reste sur le téléphone ; « Tout effacer » vide l'historique.",
     "Navigation libre" to "Cachée par défaut. Réglages › touchez sept fois la ligne de version, puis Confidentialité › Navigation libre. Les recherches passent par un moteur respectueux de la vie privée (DuckDuckGo, Brave Search, Startpage…).",
     "Sauvegarder la bibliothèque" to "Réglages › Sauvegarde : un seul fichier contient tout. Pour changer de téléphone, copiez ce fichier puis « Restaurer » sur le nouveau.",
     "Verrouiller l'appli" to "Réglages › Bloqueur et anti-pistage › Verrouiller Ohara par empreinte.",
@@ -235,6 +237,15 @@ fun GuideScreen() {
 // ---------- Nouveautés de l'appli ----------
 
 private val VERSIONS = listOf(
+    "Améliorations — 17 novembre 2026 (après-midi)" to listOf(
+        "WebNovel fonctionne : les demandes au site partent désormais d'une vraie page du site, et Ohara ne confond plus les pages normales avec une vérification anti-robot (même correction pour SpaceBattles).",
+        "Les pages FanFiction.net et WebNovel, ouvertes en version ordinateur, sont remises à la largeur du téléphone.",
+        "Traduction en un bouton dans le navigateur : toutes les pages s'affichent en français tant qu'elle est activée.",
+        "Lecteur réglé comme sur le site (police simple, texte aligné à gauche), avec un bouton « Comme sur le site » dans l'affichage.",
+        "Historique activable : pages, recherches et fics ouvertes.",
+        "Score « Prometteuse » : critères détaillés et réglables, détail du calcul sur chaque fiche.",
+        "Couvertures dessinées aux couleurs du fandom et carte « Reprendre la lecture » dans la bibliothèque."
+    ),
     "Correctifs — 17 novembre 2026" to listOf(
         "Coller un lien ouvre maintenant la fic à coup sûr : si le site demande une vérification ou tarde à répondre, la page s'ouvre dans le navigateur d'Ohara et la fic s'ouvre toute seule dès que la page s'affiche.",
         "Sur FanFiction.net, la fiche et le chapitre affiché sont lus directement sur la page, sans attendre.",

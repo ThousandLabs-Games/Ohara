@@ -32,7 +32,7 @@ Ohara réunit au même endroit la recherche, la lecture, le téléchargement et 
 
 ### Découverte
 - Recherche avancée multi-sites : site, fandom, personnages, type (self-insert, crossover, AU, fix-it, isekai, time travel, System, transmigration, OC), mots, chapitres, statut, dates, nouveautés, tri.
-- Score « Prometteuse » (intérêt des lecteurs rapporté à l'âge et à la longueur, activité, démarrage fort).
+- Score « Prometteuse » (intérêt des lecteurs rapporté à l'âge et à la longueur, longueur, activité, démarrage fort) : critères visibles et réglables, détail du calcul sur chaque fiche.
 - Onglet « Pour vous » appris de votre bibliothèque, onglet « Nouveautés » de vos fandoms, « Trouver une fic similaire ».
 
 ### Filtre anti-déchets (toujours actif)
@@ -49,6 +49,9 @@ Ohara réunit au même endroit la recherche, la lecture, le téléchargement et 
 ### Navigateur et confidentialité
 - Navigateur limité aux sites de fics, bloqueur de publicités et de pisteurs (EasyList, EasyPrivacy, liste de Peter Lowe, Fanboy), anti-pistage proche de Brave.
 - « Masquer un élément » : l'élément reste masqué sur tout le site.
+- Traduction des pages en un bouton (sur le téléphone, rien n'est envoyé).
+- FanFiction.net et WebNovel ouverts en version ordinateur puis remis à la largeur du téléphone.
+- Historique activable (pages, recherches, fics ouvertes).
 - Navigation libre cachée dans les réglages (touchez sept fois la version), avec un moteur de recherche respectueux de la vie privée.
 - Verrouillage par empreinte.
 
