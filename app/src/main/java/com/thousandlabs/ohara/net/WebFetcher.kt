@@ -35,7 +35,7 @@ object WebFetcher {
     /**
      * @param readyJs expression JavaScript qui vaut true quand le contenu voulu est affiché.
      */
-    suspend fun fetch(url: String, readyJs: String? = null, timeoutMs: Long = 40_000): Page = mutex.withLock {
+    suspend fun fetch(url: String, readyJs: String? = null, timeoutMs: Long = 25_000): Page = mutex.withLock {
         withContext(Dispatchers.Main) { load(url, readyJs, timeoutMs) }
     }
 

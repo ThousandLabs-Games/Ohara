@@ -214,13 +214,13 @@ private fun AppearanceSection() {
     Text("L'icône suit le moment de la journée : matin, l'arbre-bibliothèque sur son île ; après-midi, la stèle gravée ; soir, l'intérieur de la bibliothèque ; nuit, l'île sous la lune. Vous pouvez aussi en garder une seule.",
         Modifier.padding(horizontal = 16.dp), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     Spacer(Modifier.height(12.dp))
-    FilterChip(selected = IconSwitcher.fixed < 0, onClick = { IconSwitcher.fixed = -1; IconSwitcher.apply(context) },
+    FilterChip(selected = IconSwitcher.fixed < 0, onClick = { IconSwitcher.fixed = -1; Toast.show("L'icône suivra l'heure à partir de la prochaine fermeture d'Ohara.") },
         label = { Text("Automatique selon l'heure") }, modifier = Modifier.padding(horizontal = 16.dp))
     Row(Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.SpaceBetween) {
         ICONS.forEach { (bg, fg, slot) ->
             val sel = IconSwitcher.fixed == slot.ordinal
             Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.clickable {
-                IconSwitcher.fixed = slot.ordinal; IconSwitcher.apply(context); Toast.show("Icône « ${slot.label} » gardée.")
+                IconSwitcher.fixed = slot.ordinal; Toast.show("Icône « ${slot.label} » choisie : elle s'affichera à la prochaine fermeture d'Ohara.")
             }) {
                 Box(Modifier.then(if (sel) Modifier.border(3.dp, MaterialTheme.colorScheme.primary, CircleShape) else Modifier).padding(3.dp)) { AppIcon(bg, fg) }
                 Text(slot.label, style = MaterialTheme.typography.labelMedium)
@@ -228,7 +228,7 @@ private fun AppearanceSection() {
             }
         }
     }
-    Text("Le lanceur du téléphone peut mettre quelques secondes à afficher la nouvelle icône.", Modifier.padding(horizontal = 16.dp),
+    Text("L'icône change seulement quand Ohara est fermée (bouton retour ou appli balayée), pour ne jamais interrompre votre lecture. Le lanceur peut mettre quelques secondes à l'afficher.", Modifier.padding(horizontal = 16.dp),
         style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
 }
 

@@ -71,7 +71,9 @@ object IconSwitcher {
 
 class IconWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
     override suspend fun doWork(): Result {
-        IconSwitcher.apply(applicationContext)
+        // Changer d'icône pendant que l'appli est ouverte (même en arrière-plan) ferme sa tâche :
+        // on attend qu'elle soit vraiment fermée.
+        if (com.thousandlabs.ohara.ui.Locker.activity == null) IconSwitcher.apply(applicationContext)
         return Result.success()
     }
 }

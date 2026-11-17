@@ -75,12 +75,7 @@ class MainActivity : FragmentActivity() {
             } else Toast.show("Aucun lien de fic dans le texte partagé.")
             return
         }
-        Toast.show("Ouverture de la fic…")
-        AppScope.launch {
-            runCatching { LinkOpener.open(text) }
-                .onSuccess { o -> Nav.home(Nav.TAB_LIBRARY); Nav.push(Screen.Reader(o.fic.id, o.chapter)) }
-                .onFailure { e -> Toast.show(e.message ?: "Impossible d'ouvrir ce lien.") }
-        }
+        com.thousandlabs.ohara.ui.LinkFlow.open(text)
     }
 
     override fun onStart() {
@@ -93,12 +88,13 @@ class MainActivity : FragmentActivity() {
         Locker.onStop()
         AdBlocker.flushCount()
         Library.saveNow()
-        IconSwitcher.apply(applicationContext)
     }
 
     override fun onDestroy() {
         if (isFinishing && Prefs.clearOnExit) Privacy.clearBrowsingData(applicationContext)
         if (Locker.activity === this) Locker.activity = null
+        // l'icône ne change que quand l'appli est vraiment fermée (sinon Android ferme la tâche en cours)
+        if (isFinishing) IconSwitcher.apply(applicationContext)
         super.onDestroy()
     }
 

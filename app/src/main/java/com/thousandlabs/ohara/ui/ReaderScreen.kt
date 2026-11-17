@@ -302,7 +302,7 @@ fun ReaderScreen(ficId: String, startChapter: Int?) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Button(onClick = { reloadKey++ }) { Text("Réessayer") }
                     val u = verifyUrl ?: fic.chapters.getOrNull(requestCh)?.url ?: fic.url
-                    OutlinedButton(onClick = { if (verifyUrl != null) BrowserHolder.verifying = true; Nav.openBrowser(u) }) { Text(if (verifyUrl != null) "Vérifier" else "Ouvrir le site") }
+                    OutlinedButton(onClick = { if (verifyUrl != null) LinkFlow.verifyThenRead(ficId, fic.chapters.getOrNull(requestCh)?.url ?: u) else Nav.openBrowser(u) }) { Text(if (verifyUrl != null) "Vérifier" else "Ouvrir le site") }
                 }
             }
         }

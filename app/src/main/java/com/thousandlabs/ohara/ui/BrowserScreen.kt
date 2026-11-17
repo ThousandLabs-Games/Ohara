@@ -199,7 +199,7 @@ hide:function(s){try{document.querySelectorAll(s).forEach(function(x){x.style.se
 
     /** Lecture dans le navigateur : la fic est ajoutée à la bibliothèque, au bon chapitre (remplace l'historique de Brave). */
     fun maybeAutoAdd(u: String) {
-        if (!Prefs.autoAddVisited) return
+        if (!Prefs.autoAddVisited || LinkFlow.pending != null) return
         val (_, info) = Sources.resolve(u) ?: return
         if (info.chapterIndex == null && info.chapterKey == null) return
         if (!autoAdded.add(u.substringBefore('#'))) return
@@ -258,7 +258,10 @@ hide:function(s){try{document.querySelectorAll(s).forEach(function(x){x.style.se
                 url = u.orEmpty(); blocked = AdBlocker.PageStats.blocked
                 cosmeticJs(u).takeIf { it.isNotEmpty() }?.let { view.evaluateJavascript(it, null) }
                 if (u != null) {
-                    maybeAutoAdd(u)
+                    if (Sources.resolve(u) != null) view.evaluateJavascript("document.documentElement.outerHTML") { raw ->
+                        val html = runCatching { JSONArray("[$raw]").getString(0) }.getOrDefault("")
+                        if (html.isNotEmpty()) LinkFlow.onBrowserPage(u, html)
+                    }
                     if (verifying) view.evaluateJavascript("document.title") { t ->
                         val title = runCatching { JSONArray("[$t]").getString(0) }.getOrDefault("")
                         if (!title.contains("Just a moment", true) && !title.contains("Attention Required", true)) {
@@ -375,13 +378,13 @@ fun BrowserTab() {
         if (h.showWeb && ficLink != null) {
             Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (!inLib) OutlinedButton(onClick = {
-                    AppScope.launch { runCatching { LinkOpener.open(h.url, Shelves.TO_READ) }.onSuccess { Toast.show("« ${it.fic.title} » ajoutée.") }.onFailure { Toast.show(it.message ?: "Ajout impossible.") } }
+                    LinkFlow.open(h.url, Shelves.TO_READ, read = false)
                 }, modifier = Modifier.weight(1f)) { Icon(Icons.Outlined.LibraryAdd, null); Spacer(Modifier.width(6.dp)); Text("Ajouter") }
                 Button(onClick = {
-                    AppScope.launch { runCatching { LinkOpener.open(h.url) }.onSuccess { Nav.push(Screen.Reader(it.fic.id, it.chapter)) }.onFailure { Toast.show(it.message ?: "Ouverture impossible.") } }
+                    LinkFlow.open(h.url)
                 }, modifier = Modifier.weight(1f)) { Icon(Icons.AutoMirrored.Outlined.MenuBook, null); Spacer(Modifier.width(6.dp)); Text("Lire dans Ohara") }
                 OutlinedButton(onClick = {
-                    AppScope.launch { runCatching { LinkOpener.open(h.url, Shelves.TO_READ) }.onSuccess { Downloads.enqueue(it.fic); Toast.show("Téléchargement de tous les chapitres lancé.") }.onFailure { Toast.show(it.message ?: "Téléchargement impossible.") } }
+                    LinkFlow.open(h.url, Shelves.TO_READ, read = false, download = true)
                 }) { Icon(Icons.Outlined.Download, "Tout télécharger") }
             }
         }

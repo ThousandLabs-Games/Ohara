@@ -189,7 +189,7 @@ private fun StatBox(label: String, value: String, modifier: Modifier = Modifier)
 // ---------- Guide « Comment faire » ----------
 
 private val GUIDE = listOf(
-    "Ajouter une fic" to "Trois façons : dans Brave, bouton Partager puis Ohara ; ou copiez le lien et touchez Bibliothèque › + › Lien ; ou ouvrez le site dans l'onglet Navigateur et touchez « Ajouter ». Un lien de chapitre ouvre la fic exactement à ce chapitre. L'onglet « En lot » ajoute plusieurs liens d'un coup, et « Par titre » retrouve une fic par son nom.",
+    "Ajouter une fic" to "Trois façons : dans Brave, bouton Partager puis Ohara ; ou copiez le lien et touchez Bibliothèque › + › Lien ; ou ouvrez le site dans l'onglet Navigateur et touchez « Ajouter ». Un lien de chapitre ouvre la fic exactement à ce chapitre. L'onglet « En lot » ajoute plusieurs liens d'un coup, et « Par titre » retrouve une fic par son nom. Si le site demande une vérification « Je ne suis pas un robot » (fréquent sur FanFiction.net), la page s'ouvre dans le navigateur d'Ohara : cochez la case si elle apparaît, et Ohara ouvre la fic tout seul dès que la page s'affiche.",
     "Reprendre là où vous vous êtes arrêté" to "Ohara retient la position exacte dans le chapitre. Si vous avez lu ailleurs, collez le lien du chapitre où vous êtes : la fic s'ouvre à ce chapitre et la progression est mise à jour.",
     "Télécharger tous les chapitres" to "Sur la fiche d'une fic, « Télécharger ». Les chapitres arrivent un par un avec des pauses, pour ne pas être bloqué par le site, et le téléchargement continue écran éteint. Si un site demande « Je ne suis pas un robot », une notification vous l'indique : touchez « Vérifier », cochez la case, et tout reprend.",
     "Lire confortablement" to "Dans le lecteur, touchez le milieu de l'écran pour afficher les barres, le haut ou le bas pour changer de page. Le bouton « Aa » règle la police, la taille, l'interligne, les marges, le thème (clair, sépia, sombre, noir) et la lecture continue. Le temps restant est calculé selon votre vitesse réelle.",
@@ -234,6 +234,12 @@ fun GuideScreen() {
 // ---------- Nouveautés de l'appli ----------
 
 private val VERSIONS = listOf(
+    "Correctifs — 17 novembre 2026" to listOf(
+        "Coller un lien ouvre maintenant la fic à coup sûr : si le site demande une vérification ou tarde à répondre, la page s'ouvre dans le navigateur d'Ohara et la fic s'ouvre toute seule dès que la page s'affiche.",
+        "Sur FanFiction.net, la fiche et le chapitre affiché sont lus directement sur la page, sans attendre.",
+        "Ohara ne se ferme plus toute seule en arrière-plan : l'icône du moment change désormais seulement quand l'appli est fermée.",
+        "Le bouton « Vérifier » du lecteur ramène directement au chapitre une fois la vérification passée."
+    ),
     "Première version — novembre 2026" to listOf(
         "Bibliothèque avec étagères (À lire, En cours, Favoris, Pour Claude, Déjà lues, Abandonnées et étagères personnelles), notes sur 10, commentaires, raisons d'abandon et fiches personnages.",
         "Lecteur : polices, taille, interligne, marges, thèmes clair, sépia, sombre et noir, lecture continue ou par chapitre, surlignages avec notes, temps restant, reprise exacte.",

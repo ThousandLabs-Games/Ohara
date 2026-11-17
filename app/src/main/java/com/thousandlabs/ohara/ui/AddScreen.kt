@@ -80,24 +80,17 @@ fun AddScreen() {
                     Text("Un lien de chapitre ouvre la fic à ce chapitre précis : copiez l'adresse dans Brave là où vous vous êtes arrêté.",
                         Modifier.padding(16.dp), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Row(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Button(enabled = !busy && Sources.extractUrl(link) != null, onClick = {
+                        val busyNow = busy || LinkFlow.working
+                        Button(enabled = !busyNow && Sources.extractUrl(link) != null, onClick = {
                             busy = true
-                            AppScope.launch {
-                                runCatching { LinkOpener.open(link) }
-                                    .onSuccess { o -> busy = false; Nav.replace(Screen.Reader(o.fic.id, o.chapter)) }
-                                    .onFailure { e -> busy = false; Toast.show(e.message ?: "Lien illisible.") }
-                            }
+                            LinkFlow.open(link) { busy = false }
                         }) {
-                            if (busy) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp) else Icon(Icons.AutoMirrored.Outlined.MenuBook, null)
+                            if (busyNow) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp) else Icon(Icons.AutoMirrored.Outlined.MenuBook, null)
                             Spacer(Modifier.width(8.dp)); Text("Ouvrir à ce chapitre")
                         }
-                        OutlinedButton(enabled = !busy && Sources.extractUrl(link) != null, onClick = {
+                        OutlinedButton(enabled = !busyNow && Sources.extractUrl(link) != null, onClick = {
                             busy = true
-                            AppScope.launch {
-                                runCatching { LinkOpener.open(link, Shelves.TO_READ) }
-                                    .onSuccess { o -> busy = false; Toast.show("« ${o.fic.title} » ajoutée."); link = "" }
-                                    .onFailure { e -> busy = false; Toast.show(e.message ?: "Lien illisible.") }
-                            }
+                            LinkFlow.open(link, Shelves.TO_READ, read = false) { ok -> busy = false; if (ok) link = "" }
                         }) { Text("Ajouter seulement") }
                     }
                     Spacer(Modifier.height(24.dp))
