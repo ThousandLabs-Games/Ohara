@@ -43,7 +43,13 @@ object Http {
      * pour ce site, Ohara se présente comme un ordinateur (même moteur Chrome), partout et toujours de la même façon,
      * pour que la vérification anti-robot passée dans le navigateur reste valable.
      */
-    fun isFfn(url: String): Boolean = runCatching { java.net.URI(url).host?.lowercase()?.endsWith("fanfiction.net") == true }.getOrDefault(false)
+    fun isFfn(url: String): Boolean = needsDesktop(url)
+
+    /** Sites qui renvoient les téléphones vers une version mobile illisible pour Ohara : FanFiction.net et WebNovel. */
+    fun needsDesktop(url: String): Boolean = runCatching {
+        val h = java.net.URI(url).host?.lowercase() ?: return@runCatching false
+        h.endsWith("fanfiction.net") || h.endsWith("webnovel.com")
+    }.getOrDefault(false)
 
     val desktopUserAgent: String
         get() {
@@ -54,7 +60,9 @@ object Http {
     fun userAgentFor(url: String): String = if (isFfn(url)) desktopUserAgent else userAgent
 
     /** Adresse de la version ordinateur de FanFiction.net. */
-    fun desktopUrl(url: String): String = url.replaceFirst(Regex("^(https?://)(m\\.)?fanfiction\\.net", RegexOption.IGNORE_CASE), "https://www.fanfiction.net")
+    fun desktopUrl(url: String): String = url
+        .replaceFirst(Regex("^(https?://)(m\\.)?fanfiction\\.net", RegexOption.IGNORE_CASE), "https://www.fanfiction.net")
+        .replaceFirst(Regex("^(https?://)(m\\.)?webnovel\\.com", RegexOption.IGNORE_CASE), "https://www.webnovel.com")
 
     fun get(
         url: String,

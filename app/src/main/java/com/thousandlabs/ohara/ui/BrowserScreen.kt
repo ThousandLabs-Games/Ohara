@@ -48,6 +48,7 @@ import androidx.compose.material.icons.outlined.Public
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Shield
 import androidx.compose.material.icons.outlined.TouchApp
+import androidx.compose.material.icons.outlined.Translate
 import androidx.compose.material.icons.outlined.VerifiedUser
 import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material3.Button
@@ -353,6 +354,9 @@ fun BrowserTab() {
                         DropdownMenu(menu, onDismissRequest = { menu = false }) {
                             if (h.showWeb) {
                                 DropdownMenuItem(text = { Text("Page suivante") }, leadingIcon = { Icon(Icons.AutoMirrored.Outlined.ArrowForward, null) }, enabled = web.canGoForward(), onClick = { menu = false; web.goForward() })
+                                if (ficLink != null) DropdownMenuItem(text = { Text("Lire en français dans Ohara") }, leadingIcon = { Icon(Icons.Outlined.Translate, null) }, onClick = {
+                                    menu = false; com.thousandlabs.ohara.translate.Translate.enabled = true; LinkFlow.openFromPage(web, h.url)
+                                })
                                 DropdownMenuItem(text = { Text("Masquer un élément") }, leadingIcon = { Icon(Icons.Outlined.TouchApp, null) }, onClick = { menu = false; h.startPicker() })
                                 val on = AdBlocker.enabledOn(h.url)
                                 DropdownMenuItem(text = { Text(if (on) "Désactiver le bloqueur sur ce site" else "Réactiver le bloqueur sur ce site") }, leadingIcon = { Icon(Icons.Outlined.Shield, null) }, onClick = {
