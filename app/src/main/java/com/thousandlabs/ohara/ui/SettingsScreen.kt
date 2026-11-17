@@ -200,6 +200,8 @@ fun AppIcon(bg: Int, fg: Int, size: Int = 64) {
 @Composable
 private fun AppearanceSection() {
     val context = LocalContext.current
+    SectionTitle("Navigateur")
+    SwitchRow("Cacher les barres en lisant", "Les barres du haut et du bas disparaissent quand vous descendez dans une page, et reviennent quand vous remontez", BrowserHolder.autoHideBars) { BrowserHolder.autoHideBars = it }
     SectionTitle("Thème de l'appli")
     FlowRow(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         THEMES.forEachIndexed { i, t -> FilterChip(selected = Prefs.appTheme == i, onClick = { Prefs.appTheme = i }, label = { Text(t) }) }
