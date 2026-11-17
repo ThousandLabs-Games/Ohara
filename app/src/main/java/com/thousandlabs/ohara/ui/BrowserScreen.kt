@@ -50,6 +50,16 @@ import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.ArrowForward
 import androidx.compose.material.icons.automirrored.outlined.HelpOutline
 import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.outlined.*
+import androidx.compose.foundation.layout.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.material.icons.outlined.StarOutline
+import androidx.compose.material.icons.outlined.Bookmarks
+import androidx.compose.material.icons.outlined.TextFields
+import androidx.compose.material.icons.automirrored.outlined.MenuBook
+import androidx.compose.material.icons.automirrored.outlined.OpenInNew
+import androidx.compose.material.icons.outlined.Link
 import androidx.compose.material.icons.outlined.AddLink
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.ContentCopy
@@ -152,7 +162,7 @@ val SEARCH_ENGINES = listOf(
 )
 
 /** Un onglet du navigateur. Sa page vierge (adresse vide) est la page d'accueil d'Ohara. */
-class Tab(val id: Long, initialUrl: String) {
+class Tab(val id: Long, initialUrl: String, val private: Boolean = false) {
     var url by mutableStateOf(initialUrl)
     var title by mutableStateOf("")
     var progress by mutableIntStateOf(100)
@@ -173,6 +183,8 @@ class Tab(val id: Long, initialUrl: String) {
     /** Aperçu de la page (pour la liste des onglets) et icône du site. */
     var thumb by mutableStateOf<androidx.compose.ui.graphics.ImageBitmap?>(null)
     var icon by mutableStateOf<androidx.compose.ui.graphics.ImageBitmap?>(null)
+    /** Page affichée en mode lecture. */
+    var readerMode by mutableStateOf(false)
     val isStart: Boolean get() = url.isBlank()
 }
 
@@ -185,6 +197,10 @@ object BrowserHolder {
     var picking by mutableStateOf(false)
     var picked by mutableStateOf<Triple<String, String, Int>?>(null)
     var findOpen by mutableStateOf(false)
+    /** Lien touché longuement (menu du lien). */
+    var linkMenu by mutableStateOf<String?>(null)
+    var groupTabs: Boolean get() = Prefs.getBool("tab_groups", true); set(v) = Prefs.putBool("tab_groups", v)
+    private const val PRIVATE_PROFILE = "prive"
     /** Barres du haut et du bas affichées (elles se cachent quand on descend dans la page). */
     var barsVisible by mutableStateOf(true)
     var autoHideBars: Boolean get() = Prefs.getBool("hide_bars", true); set(v) = Prefs.putBool("hide_bars", v)
@@ -213,8 +229,9 @@ object BrowserHolder {
     }
 
     fun saveTabs() {
-        Prefs.putList("tabs", tabs.map { if (it.offline) "" else it.url })
-        Prefs.putInt("tab_cur", current)
+        val kept = tabs.filter { !it.private }
+        Prefs.putList("tabs", kept.map { if (it.offline) "" else it.url })
+        Prefs.putInt("tab_cur", kept.indexOf(tabs.getOrNull(current)).coerceAtLeast(0))
     }
 
     fun allowedHost(host: String?): Boolean {
@@ -258,9 +275,9 @@ object BrowserHolder {
         t.web?.let { load(t, it, url) }
     }
 
-    fun newTab(url: String = "", select: Boolean = true): Tab {
+    fun newTab(url: String = "", select: Boolean = true, private: Boolean = false): Tab {
         restore()
-        val t = Tab(nextId++, url)
+        val t = Tab(nextId++, url, private)
         tabs.add(t)
         if (select) { current = tabs.lastIndex; t.lastUsed = System.currentTimeMillis() }
         showTabs = false
@@ -304,13 +321,24 @@ object BrowserHolder {
         if (i < 0) return
         destroy(t)
         tabs.removeAt(i)
+        if (t.private && tabs.none { it.private }) forgetPrivate()
         if (tabs.isEmpty()) tabs.add(Tab(nextId++, ""))
         if (current >= tabs.size || i < current) current = (current - 1).coerceAtLeast(0)
         saveTabs()
     }
 
+    /** Plus aucun onglet privé : leurs cookies et données sont effacés. */
+    private fun forgetPrivate() {
+        runCatching {
+            if (androidx.webkit.WebViewFeature.isFeatureSupported(androidx.webkit.WebViewFeature.MULTI_PROFILE))
+                androidx.webkit.ProfileStore.getInstance().deleteProfile(PRIVATE_PROFILE)
+        }
+    }
+
     fun closeAll() {
+        val hadPrivate = tabs.any { it.private }
         tabs.forEach { destroy(it) }
+        if (hadPrivate) forgetPrivate()
         tabs.clear(); tabs.add(Tab(nextId++, "")); current = 0
         saveTabs()
     }
@@ -423,19 +451,54 @@ hide:function(s){try{document.querySelectorAll(s).forEach(function(x){x.style.se
     fun ficInfo(url: String): LinkInfo? = if (url.isBlank()) null else Sources.resolve(url)?.second
 
     /** Scripts de la page : masquage, sélection, suivi de lecture, traduction. */
-    fun pageScripts(w: WebView, u: String) {
+    fun pageScripts(w: WebView, u: String, t: Tab) {
         val info = ficInfo(u)
+        val chapter = PageTools.isChapter(info, u)
         w.evaluateJavascript(PageMask.script(PageMask.config(info)), null)
         w.evaluateJavascript(PageMask.SELECTION_JS, null)
-        if (info != null && (info.chapterIndex != null || info.chapterKey != null || (info.site == Site.SB && u.contains("/reader")))) w.evaluateJavascript(ReadTracker.script(info), null)
+        if (chapter && !t.private) w.evaluateJavascript(ReadTracker.script(info!!), null)
+        if (PageTools.pullNav && (chapter || t.offline)) {
+            val (prev, next) = if (info != null) PageTools.neighbours(u, info) else null to null
+            w.evaluateJavascript(PageTools.pullScript(prev, next), null)
+        }
+        if (!t.offline && (t.readerMode || (PageTools.autoReader && chapter))) {
+            t.readerMode = true
+            w.evaluateJavascript(PageTools.readerScript(PageTools.readerConfig(info)), null)
+        }
         PageTranslator.inject(w)
+    }
+
+    fun toggleReader(t: Tab) {
+        val w = t.web ?: return
+        if (t.readerMode) { t.readerMode = false; w.reload(); return }
+        t.readerMode = true
+        val info = ficInfo(t.url)
+        if (PageTools.pullNav) { val (p, n) = if (info != null) PageTools.neighbours(t.url, info) else null to null; w.evaluateJavascript(PageTools.pullScript(p, n), null) }
+        w.evaluateJavascript(PageTools.readerScript(PageTools.readerConfig(info)), null)
+    }
+
+    fun applyReaderStyle(t: Tab) {
+        if (t.readerMode) t.web?.evaluateJavascript(PageTools.readerScript(PageTools.readerConfig(ficInfo(t.url))), null)
     }
 
     @SuppressLint("SetJavaScriptEnabled")
     fun webFor(t: Tab, context: Context): WebView {
         t.web?.let { return it }
         val w = WebView(context)
-        Privacy.configure(w)
+        if (t.private) runCatching {
+            if (androidx.webkit.WebViewFeature.isFeatureSupported(androidx.webkit.WebViewFeature.MULTI_PROFILE)) {
+                androidx.webkit.ProfileStore.getInstance().getOrCreateProfile(PRIVATE_PROFILE)
+                androidx.webkit.WebViewCompat.setProfile(w, PRIVATE_PROFILE)
+            }
+        }
+        Privacy.configure(w, private = t.private)
+        w.setOnLongClickListener {
+            val r = w.hitTestResult
+            val link = r.extra
+            if ((r.type == WebView.HitTestResult.SRC_ANCHOR_TYPE || r.type == WebView.HitTestResult.SRC_IMAGE_ANCHOR_TYPE) && !link.isNullOrBlank() && link.startsWith("http")) {
+                linkMenu = link; true
+            } else false
+        }
         w.settings.userAgentString = if (t.desktop) Http.desktopUserAgent else Http.userAgent
         val main = Handler(Looper.getMainLooper())
         w.addJavascriptInterface(object {
@@ -443,11 +506,15 @@ hide:function(s){try{document.querySelectorAll(s).forEach(function(x){x.style.se
         }, "OharaPick")
         w.addJavascriptInterface(object {
             @JavascriptInterface fun report(words: Int, fraction: Float, meta: String) {
+                if (t.private) return
                 val u = t.pageUrl ?: return
                 main.post { if (meta.isNotBlank()) t.meta = meta; ReadTracker.onReport(u, words, fraction, meta) }
             }
-            @JavascriptInterface fun chapter(html: String) { val u = t.pageUrl ?: return; main.post { ReadTracker.onChapter(u, html) } }
+            @JavascriptInterface fun chapter(html: String) { if (t.private) return; val u = t.pageUrl ?: return; main.post { ReadTracker.onChapter(u, html) } }
         }, "OharaRead")
+        w.addJavascriptInterface(object {
+            @JavascriptInterface fun failed() { main.post { t.readerMode = false; Toast.show("Pas de texte principal trouvé : le mode lecture ne s'applique pas à cette page.") } }
+        }, "OharaReader")
         w.addJavascriptInterface(object {
             @JavascriptInterface fun selection(text: String, para: String) { main.post { t.selection = if (text.isBlank()) null else text to para } }
         }, "OharaSel")
@@ -529,9 +596,9 @@ hide:function(s){try{document.querySelectorAll(s).forEach(function(x){x.style.se
                 t.canBack = view.canGoBack(); t.canForward = view.canGoForward()
                 cosmeticJs(u).takeIf { it.isNotEmpty() }?.let { view.evaluateJavascript(it, null) }
                 if (u == null || !u.startsWith("http")) return
-                pageScripts(view, u)
+                pageScripts(view, u, t)
                 view.postDelayed({ if (t === tab && !showTabs) capture(t) }, 1200)
-                if (!t.offline) {
+                if (!t.offline && !t.private) {
                     History.add(History.Kind.PAGE, view.title.orEmpty(), u)
                     saveTabs()
                 }
@@ -604,7 +671,7 @@ fun BrowserHome() {
     Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         val showBars = editing || h.barsVisible || t.isStart || h.picking || h.findOpen || t.selection != null
         Column(Modifier.fillMaxSize()) {
-            if (showBars) AddressBar(t, editing, onEdit = { editing = it })
+            if (showBars) PrivateTint(t.private) { AddressBar(t, editing, onEdit = { editing = it }) }
             else Spacer(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceContainer).statusBarsPadding())
             if (!editing) {
                 if (showBars || t.serverError >= 500 || BrowserHolder.verifying) PageNotes(t)
@@ -620,13 +687,30 @@ fun BrowserHome() {
                 if (h.findOpen) FindBar(t)
                 SelectionBar(t)
                 if (h.picking) PickerBar()
-                if (showBars) BottomToolbar(t, onMenu = { menu = true })
+                if (showBars) PrivateTint(t.private) { BottomToolbar(t, onMenu = { menu = true }) }
                 else Spacer(Modifier.fillMaxWidth().navigationBarsPadding())
             } else Spacer(Modifier.weight(1f))
         }
         if (h.showTabs) TabSwitcher()
     }
-    if (menu) BrowserMenu(t, context) { menu = false }
+    var bookmarkDialog by remember { mutableStateOf(false) }
+    var readerStyle by remember { mutableStateOf(false) }
+    if (menu) BrowserMenu(t, context, onBookmark = { bookmarkDialog = true }, onReaderStyle = { readerStyle = true }) { menu = false }
+    if (bookmarkDialog) BookmarkDialog(t.title.ifBlank { t.url }, t.url) { bookmarkDialog = false }
+    if (readerStyle) ReaderStyleSheet(t) { readerStyle = false }
+    h.linkMenu?.let { link -> LinkMenu(link, context) { h.linkMenu = null } }
+}
+
+/** Barres sombres pour les onglets privés, comme dans les autres navigateurs. */
+@Composable
+private fun PrivateTint(private: Boolean, content: @Composable () -> Unit) {
+    if (!private) { content(); return }
+    MaterialTheme(colorScheme = darkColorScheme(
+        primary = Color(0xFFB9A6F0), onPrimary = Color(0xFF241A45),
+        surface = Color(0xFF1B1C1F), onSurface = Color(0xFFE6E3DE), onSurfaceVariant = Color(0xFFB4B1AA),
+        surfaceContainer = Color(0xFF202125), surfaceContainerHigh = Color(0xFF2A2B30), surfaceContainerHighest = Color(0xFF34353A),
+        background = Color(0xFF161719), onBackground = Color(0xFFE6E3DE), outline = Color(0xFF7A7873)
+    ), typography = MaterialTheme.typography, shapes = MaterialTheme.shapes, content = content)
 }
 
 @Composable
@@ -661,11 +745,11 @@ private fun AddressBar(t: Tab, editing: Boolean, onEdit: (Boolean) -> Unit) {
                             .clickable { onEdit(true) }.padding(horizontal = 14.dp, vertical = 11.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(if (t.offline) Icons.Outlined.WifiOff else if (t.isStart) Icons.Outlined.Search else Icons.Outlined.Lock, null,
+                        Icon(if (t.private) Icons.Outlined.VisibilityOff else if (t.offline) Icons.Outlined.WifiOff else if (t.isStart) Icons.Outlined.Search else Icons.Outlined.Lock, if (t.private) "Onglet privé" else null,
                             Modifier.size(16.dp), tint = cs.onSurfaceVariant)
                         Spacer(Modifier.width(8.dp))
                         Text(
-                            when { t.isStart -> "Rechercher ou saisir une adresse"; t.offline -> "Hors connexion · ${t.title}"; else -> host },
+                            when { t.isStart && t.private -> "Onglet privé · rechercher ou saisir une adresse"; t.isStart -> "Rechercher ou saisir une adresse"; t.offline -> "Hors connexion · ${t.title}"; else -> host },
                             style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis,
                             color = if (t.isStart) cs.onSurfaceVariant else cs.onSurface, modifier = Modifier.weight(1f)
                         )
@@ -883,7 +967,7 @@ fun MenuTile(icon: ImageVector, label: String, active: Boolean = false, enabled:
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
-private fun BrowserMenu(t: Tab, context: Context, onClose: () -> Unit) {
+private fun BrowserMenu(t: Tab, context: Context, onBookmark: () -> Unit, onReaderStyle: () -> Unit, onClose: () -> Unit) {
     val h = BrowserHolder
     val info = h.ficInfo(t.url)
     val inLib = info != null && Library.contains(info.ficId)
@@ -898,6 +982,7 @@ private fun BrowserMenu(t: Tab, context: Context, onClose: () -> Unit) {
             }
             FlowRow(horizontalArrangement = Arrangement.SpaceEvenly, modifier = Modifier.fillMaxWidth()) {
                 MenuTile(Icons.Outlined.Add, "Nouvel onglet") { onClose(); h.newTab() }
+                MenuTile(Icons.Outlined.VisibilityOff, "Onglet privé") { onClose(); h.newTab(private = true) }
                 MenuTile(Icons.Outlined.LocalLibrary, "Bibliothèque") { onClose(); Nav.push(Screen.Library) }
                 MenuTile(Icons.Outlined.Explore, "Découvrir") { onClose(); Nav.push(Screen.Discover) }
                 MenuTile(Icons.Outlined.Download, "Téléchargements") { onClose(); Nav.push(Screen.Downloads) }
@@ -907,6 +992,15 @@ private fun BrowserMenu(t: Tab, context: Context, onClose: () -> Unit) {
                     }
                     MenuTile(Icons.Outlined.Download, "Télécharger la fic") { onClose(); h.addCurrent(true) }
                 }
+                val fav = !t.isStart && com.thousandlabs.ohara.data.Bookmarks.contains(t.url)
+                MenuTile(Icons.Outlined.StarOutline, if (fav) "Dans les favoris" else "Ajouter aux favoris", active = fav, enabled = !t.isStart) {
+                    onClose(); onBookmark()
+                }
+                MenuTile(Icons.Outlined.Bookmarks, "Favoris") { onClose(); Nav.push(Screen.BookmarksScreen) }
+                MenuTile(Icons.AutoMirrored.Outlined.MenuBook, if (t.readerMode) "Quitter le mode lecture" else "Mode lecture", active = t.readerMode, enabled = !t.isStart) {
+                    onClose(); h.toggleReader(t)
+                }
+                if (t.readerMode) MenuTile(Icons.Outlined.TextFields, "Affichage de lecture") { onClose(); onReaderStyle() }
                 MenuTile(Icons.Outlined.History, "Historique") { onClose(); Nav.push(Screen.HistoryScreen) }
                 MenuTile(Icons.Outlined.Translate, "Traduire", active = Translate.enabled, enabled = !t.isStart) {
                     onClose(); Translate.enabled = !Translate.enabled
@@ -942,13 +1036,46 @@ private fun TabSwitcher() {
     val h = BrowserHolder
     val cs = MaterialTheme.colorScheme
     var q by remember { mutableStateOf("") }
-    val list = h.tabs.toList().filter { q.isBlank() || it.title.contains(q, true) || it.url.contains(q, true) }
-    Surface(Modifier.fillMaxSize(), color = cs.surfaceContainerLow) {
+    var privateView by remember { mutableStateOf(h.tabs.getOrNull(h.current)?.private == true) }
+    var grouped by remember { mutableStateOf(h.groupTabs) }
+    val collapsed = remember { mutableStateListOf<String>() }
+    val all = h.tabs.toList().filter { it.private == privateView }
+    val list = all.filter { q.isBlank() || it.title.contains(q, true) || it.url.contains(q, true) }
+    val privCount = h.tabs.count { it.private }
+    // Groupes : les onglets d'une même fic, sinon d'un même site (dès qu'il y en a au moins deux).
+    val groups = remember(list.map { it.id to it.url }, grouped) {
+        if (!grouped) listOf(Triple("", "", list))
+        else {
+            val keyOf = { tb: Tab ->
+                val info = h.ficInfo(tb.url)
+                when {
+                    tb.isStart -> "start" to "Nouveaux onglets"
+                    info != null -> ("fic:" + info.ficId) to (Library.get(info.ficId)?.title ?: tb.title.substringBefore(" Chapter").substringBefore(" | ").ifBlank { "Fic" })
+                    else -> runCatching { java.net.URI(tb.url).host?.removePrefix("www.")?.removePrefix("m.") }.getOrNull().orEmpty().let { ("site:" + it) to it }
+                }
+            }
+            val byKey = list.groupBy { keyOf(it) }
+            val multi = byKey.filter { it.value.size >= 2 }.map { (k, v) -> Triple(k.first, k.second, v) }
+            val rest = byKey.filter { it.value.size < 2 }.values.flatten()
+            multi + if (rest.isNotEmpty()) listOf(Triple("", if (multi.isEmpty()) "" else "Autres onglets", rest)) else emptyList()
+        }
+    }
+    Surface(Modifier.fillMaxSize(), color = if (privateView) Color(0xFF17181A) else cs.surfaceContainerLow,
+        contentColor = if (privateView) Color(0xFFE4E2DD) else cs.onSurface) {
         Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
             Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                 IconButton(onClick = { h.showTabs = false }) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, "Retour") }
-                Text(Fmt.plural(h.tabs.size, "onglet"), style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
-                TextButton(onClick = { h.closeAll() }) { Text("Tout fermer") }
+                Text(Fmt.plural(all.size, if (privateView) "onglet privé" else "onglet"), style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
+                IconButton(onClick = { grouped = !grouped; h.groupTabs = grouped }) {
+                    Icon(if (grouped) Icons.Outlined.ViewAgenda else Icons.Outlined.GridView, if (grouped) "Ne plus grouper" else "Grouper les onglets")
+                }
+                TextButton(onClick = { all.forEach { h.close(it) } }) { Text("Tout fermer") }
+            }
+            Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilterChip(!privateView, { privateView = false }, { Text("Onglets (${h.tabs.size - privCount})") },
+                    leadingIcon = { Icon(Icons.Outlined.Tab, null, Modifier.size(18.dp)) })
+                FilterChip(privateView, { privateView = true }, { Text("Privés ($privCount)") },
+                    leadingIcon = { Icon(Icons.Outlined.VisibilityOff, null, Modifier.size(18.dp)) })
             }
             TextField(
                 q, { q = it }, singleLine = true, placeholder = { Text("Rechercher dans vos onglets") },
@@ -958,51 +1085,89 @@ private fun TabSwitcher() {
                     focusedContainerColor = cs.surfaceContainerHighest, unfocusedContainerColor = cs.surfaceContainerHighest),
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)
             )
-            LazyVerticalGrid(GridCells.Fixed(2), Modifier.weight(1f), contentPadding = PaddingValues(14.dp),
+            if (privateView && all.isEmpty()) {
+                Column(Modifier.weight(1f).fillMaxWidth().padding(32.dp), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
+                    Icon(Icons.Outlined.VisibilityOff, null, Modifier.size(48.dp))
+                    Spacer(Modifier.height(12.dp))
+                    Text("Navigation privée", style = MaterialTheme.typography.titleMedium)
+                    Spacer(Modifier.height(6.dp))
+                    Text("Les onglets privés ne laissent rien derrière eux : ni historique, ni lecture comptée pour la bibliothèque, ni page gardée en cache. " +
+                        "Leurs cookies sont effacés quand le dernier onglet privé est fermé.",
+                        style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center)
+                }
+            } else LazyVerticalGrid(GridCells.Fixed(2), Modifier.weight(1f), contentPadding = PaddingValues(14.dp),
                 horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                items(list, key = { it.id }) { tb ->
-                    val sel = h.tabs.indexOf(tb) == h.current
-                    val host = runCatching { java.net.URI(tb.url).host?.removePrefix("www.")?.removePrefix("m.") }.getOrNull().orEmpty()
-                    val head = if (sel) cs.primary else cs.surfaceContainerHighest
-                    val onHead = if (sel) cs.onPrimary else cs.onSurface
-                    Surface(
-                        shape = RoundedCornerShape(22.dp), color = head, shadowElevation = if (sel) 4.dp else 1.dp,
-                        modifier = Modifier.fillMaxWidth().height(250.dp).clickable { h.select(h.tabs.indexOf(tb)) }
-                    ) {
-                        Column {
-                            Row(Modifier.fillMaxWidth().padding(start = 10.dp, end = 2.dp, top = 6.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                                val ic = tb.icon
-                                if (ic != null) Image(ic, null, Modifier.size(22.dp).clip(RoundedCornerShape(5.dp)))
-                                else Box(Modifier.size(22.dp).clip(RoundedCornerShape(5.dp)).background(cs.primaryContainer), contentAlignment = Alignment.Center) {
-                                    Text((if (tb.isStart) "O" else host.take(1)).uppercase(), fontSize = 12.sp, fontWeight = FontWeight.Bold, color = cs.onPrimaryContainer)
-                                }
-                                Spacer(Modifier.width(8.dp))
-                                Text(if (tb.isStart) "Page d'accueil" else tb.title.ifBlank { host }, style = MaterialTheme.typography.labelLarge,
-                                    color = onHead, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-                                IconButton(onClick = { h.close(tb) }, modifier = Modifier.size(34.dp)) { Icon(Icons.Outlined.Close, "Fermer l'onglet", Modifier.size(18.dp), tint = onHead) }
-                            }
-                            Box(Modifier.fillMaxWidth().weight(1f).padding(start = 5.dp, end = 5.dp, bottom = 5.dp).clip(RoundedCornerShape(18.dp)).background(cs.surface)) {
-                                val th = tb.thumb
-                                when {
-                                    th != null -> Image(th, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop, alignment = Alignment.TopCenter)
-                                    tb.isStart -> Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
-                                        Text("Ohara", style = MaterialTheme.typography.titleLarge.merge(SerifTitle), color = cs.primary)
-                                        Text("Nouvel onglet", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
-                                    }
-                                    else -> Column(Modifier.fillMaxSize().padding(12.dp)) {
-                                        Text(tb.title.ifBlank { host }, style = MaterialTheme.typography.bodySmall, maxLines = 6, overflow = TextOverflow.Ellipsis)
-                                        Spacer(Modifier.weight(1f))
-                                        Text(if (tb.offline) "hors connexion" else host, style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
-                                    }
-                                }
+                groups.forEach { (key, label, tabsOf) ->
+                    if (label.isNotEmpty()) item(key = "g:$key:$label", span = { androidx.compose.foundation.lazy.grid.GridItemSpan(2) }) {
+                        val open = key.isEmpty() || key !in collapsed
+                        Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(if (privateView) Color(0xFF26282B) else cs.surfaceContainerHigh)
+                            .clickable(enabled = key.isNotEmpty()) { if (key in collapsed) collapsed.remove(key) else collapsed.add(key) }
+                            .padding(start = 12.dp, end = 4.dp, top = 2.dp, bottom = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Icon(when { key.startsWith("fic:") -> Icons.AutoMirrored.Outlined.MenuBook; key.startsWith("site:") -> Icons.Outlined.Public; else -> Icons.Outlined.Tab },
+                                null, Modifier.size(18.dp), tint = cs.primary)
+                            Spacer(Modifier.width(10.dp))
+                            Text(label, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                            Text("${tabsOf.size}", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
+                            if (key.isNotEmpty()) {
+                                IconButton(onClick = { tabsOf.forEach { h.close(it) } }) { Icon(Icons.Outlined.Close, "Fermer le groupe", Modifier.size(18.dp)) }
+                                Icon(if (open) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore, if (open) "Replier" else "Déplier", Modifier.padding(end = 8.dp))
                             }
                         }
                     }
+                    if (key.isEmpty() || key !in collapsed) items(tabsOf, key = { it.id }) { tb -> TabCard(tb) }
                 }
             }
             Box(Modifier.fillMaxWidth().padding(vertical = 10.dp), contentAlignment = Alignment.Center) {
-                androidx.compose.material3.FloatingActionButton(onClick = { h.newTab() }, containerColor = cs.primary, contentColor = cs.onPrimary) {
-                    Icon(Icons.Outlined.Add, "Nouvel onglet")
+                androidx.compose.material3.ExtendedFloatingActionButton(onClick = { h.newTab(private = privateView) },
+                    containerColor = cs.primary, contentColor = cs.onPrimary,
+                    icon = { Icon(if (privateView) Icons.Outlined.VisibilityOff else Icons.Outlined.Add, null) },
+                    text = { Text(if (privateView) "Onglet privé" else "Nouvel onglet") })
+            }
+        }
+    }
+}
+
+@Composable
+private fun TabCard(tb: Tab) {
+    val h = BrowserHolder
+    val cs = MaterialTheme.colorScheme
+    val sel = h.tabs.indexOf(tb) == h.current
+    val host = runCatching { java.net.URI(tb.url).host?.removePrefix("www.")?.removePrefix("m.") }.getOrNull().orEmpty()
+    val head = when { sel -> cs.primary; tb.private -> Color(0xFF2E3034); else -> cs.surfaceContainerHighest }
+    val onHead = when { sel -> cs.onPrimary; tb.private -> Color(0xFFE4E2DD); else -> cs.onSurface }
+    Surface(
+        shape = RoundedCornerShape(22.dp), color = head, shadowElevation = if (sel) 4.dp else 1.dp,
+        modifier = Modifier.fillMaxWidth().height(250.dp).clickable { h.select(h.tabs.indexOf(tb)) }
+    ) {
+        Column {
+            Row(Modifier.fillMaxWidth().padding(start = 10.dp, end = 2.dp, top = 6.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                val ic = tb.icon
+                if (ic != null) Image(ic, null, Modifier.size(22.dp).clip(RoundedCornerShape(5.dp)))
+                else Box(Modifier.size(22.dp).clip(RoundedCornerShape(5.dp)).background(cs.primaryContainer), contentAlignment = Alignment.Center) {
+                    Text((if (tb.isStart) "O" else host.take(1)).uppercase(), fontSize = 12.sp, fontWeight = FontWeight.Bold, color = cs.onPrimaryContainer)
+                }
+                Spacer(Modifier.width(8.dp))
+                Text(if (tb.isStart) (if (tb.private) "Onglet privé" else "Page d'accueil") else tb.title.ifBlank { host }, style = MaterialTheme.typography.labelLarge,
+                    color = onHead, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                IconButton(onClick = { h.close(tb) }, modifier = Modifier.size(34.dp)) { Icon(Icons.Outlined.Close, "Fermer l'onglet", Modifier.size(18.dp), tint = onHead) }
+            }
+            Box(Modifier.fillMaxWidth().weight(1f).padding(start = 5.dp, end = 5.dp, bottom = 5.dp).clip(RoundedCornerShape(18.dp)).background(if (tb.private) Color(0xFF1E2023) else cs.surface)) {
+                val th = tb.thumb
+                when {
+                    th != null -> Image(th, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop, alignment = Alignment.TopCenter)
+                    tb.isStart -> Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
+                        if (tb.private) Icon(Icons.Outlined.VisibilityOff, null, tint = Color(0xFFB8B6B0))
+                        else Text("Ohara", style = MaterialTheme.typography.titleLarge.merge(SerifTitle), color = cs.primary)
+                        Text(if (tb.private) "Navigation privée" else "Nouvel onglet", style = MaterialTheme.typography.labelSmall, color = if (tb.private) Color(0xFFB8B6B0) else cs.onSurfaceVariant)
+                    }
+                    else -> Column(Modifier.fillMaxSize().padding(12.dp)) {
+                        Text(tb.title.ifBlank { host }, style = MaterialTheme.typography.bodySmall, maxLines = 6, overflow = TextOverflow.Ellipsis)
+                        Spacer(Modifier.weight(1f))
+                        Text(if (tb.offline) "hors connexion" else host, style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
+                    }
+                }
+                if (tb.private) Box(Modifier.align(Alignment.BottomStart).padding(6.dp).clip(RoundedCornerShape(10.dp)).background(Color(0xCC000000)).padding(horizontal = 7.dp, vertical = 2.dp)) {
+                    Text("Privé", fontSize = 10.sp, color = Color.White)
                 }
             }
         }
@@ -1071,6 +1236,24 @@ private fun StartPage(onSearch: () -> Unit) {
                         }
                         Spacer(Modifier.height(6.dp))
                         Text(name, style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                }
+            }
+            val marks by com.thousandlabs.ohara.data.Bookmarks.items.collectAsState()
+            if (marks.isNotEmpty()) {
+                Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 8.dp, top = 18.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text("Favoris", style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
+                    TextButton(onClick = { Nav.push(Screen.BookmarksScreen) }) { Text("Tout voir") }
+                }
+                LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    items(marks.take(20), key = { it.url }) { b ->
+                        Row(Modifier.widthIn(max = 200.dp).clip(RoundedCornerShape(18.dp)).background(cs.surfaceContainerHigh)
+                            .clickable { BrowserHolder.openUrl(b.url, newTab = false) }.padding(horizontal = 12.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Outlined.StarOutline, null, Modifier.size(16.dp), tint = cs.primary)
+                            Spacer(Modifier.width(6.dp))
+                            Text(b.title, style = MaterialTheme.typography.labelLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
                     }
                 }
             }

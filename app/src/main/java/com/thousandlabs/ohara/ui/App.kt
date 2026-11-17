@@ -98,6 +98,7 @@ fun OharaRoot() {
                         Screen.Hidden -> HiddenScreen()
                         Screen.Duplicates -> DuplicatesScreen()
                         Screen.HistoryScreen -> HistoryScreen()
+                        Screen.BookmarksScreen -> BookmarksScreen()
                         is Screen.Settings -> SettingsDetailScreen(s.section)
                     }
                 }
