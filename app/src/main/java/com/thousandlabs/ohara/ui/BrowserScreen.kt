@@ -148,7 +148,15 @@ object BrowserHolder {
             return
         }
         showWeb = true
-        web?.loadUrl(clean, Privacy.headers()) ?: run { pendingUrl = clean }
+        web?.let { load(it, clean) } ?: run { pendingUrl = clean }
+    }
+
+    /** Charge une adresse avec le bon identifiant de navigateur (version ordinateur pour FanFiction.net). */
+    fun load(view: WebView, raw: String) {
+        val u = if (Http.isFfn(raw)) Http.desktopUrl(raw) else raw
+        val ua = Http.userAgentFor(u)
+        if (view.settings.userAgentString != ua) view.settings.userAgentString = ua
+        view.loadUrl(u, Privacy.headers())
     }
 
     fun cosmeticJs(page: String?): String {
@@ -236,7 +244,8 @@ hide:function(s){try{document.querySelectorAll(s).forEach(function(x){x.style.se
                     return true
                 }
                 val clean = Privacy.upgrade(Privacy.cleanUrl(u))
-                if (clean != u) { view.loadUrl(clean, Privacy.headers()); return true }
+                val target = if (Http.isFfn(clean)) Http.desktopUrl(clean) else clean
+                if (target != u || view.settings.userAgentString != Http.userAgentFor(target)) { load(view, target); return true }
                 return false
             }
 
@@ -246,6 +255,8 @@ hide:function(s){try{document.querySelectorAll(s).forEach(function(x){x.style.se
             }
 
             override fun onPageStarted(view: WebView, u: String?, favicon: Bitmap?) {
+                // redirection du site vers sa version mobile : on repasse sur la version ordinateur
+                if (u != null && Http.isFfn(u) && Http.desktopUrl(u) != u) { view.stopLoading(); load(view, u); return }
                 pageUrl = u; url = u.orEmpty(); AdBlocker.PageStats.blocked = 0; blocked = 0
                 picking = false; picked = null
             }
@@ -292,7 +303,7 @@ fun BrowserTab() {
     val web = remember { h.create(context) }
 
     LaunchedEffect(h.pendingUrl) {
-        h.pendingUrl?.let { u -> h.pendingUrl = null; h.showWeb = true; web.loadUrl(u, Privacy.headers()) }
+        h.pendingUrl?.let { u -> h.pendingUrl = null; h.showWeb = true; h.load(web, u) }
     }
     BackHandler(enabled = h.picking) { h.stopPicker() }
     BackHandler(enabled = !h.picking && h.showWeb) { if (web.canGoBack()) web.goBack() else h.showWeb = false }
@@ -369,6 +380,11 @@ fun BrowserTab() {
             }
         }
 
+        if (LinkFlow.pending != null && h.showWeb && !h.verifying) {
+            NoteCard("Ohara ouvre la fic dès que la page est affichée. Si une case « Je ne suis pas un robot » apparaît, cochez-la.", icon = Icons.Outlined.VerifiedUser, action = {
+                TextButton(onClick = { LinkFlow.pending = null }) { Text("Annuler") }
+            })
+        }
         if (h.verifying && h.showWeb) {
             NoteCard("Cochez la case de vérification du site si elle s'affiche. Le téléchargement reprendra tout seul dès que la page normale apparaît.", icon = Icons.Outlined.VerifiedUser, action = {
                 TextButton(onClick = { h.verifying = false; Fetcher.verificationDone(h.url); Downloads.resumeVerified(); Toast.show("Le téléchargement reprend.") }) { Text("Terminé") }

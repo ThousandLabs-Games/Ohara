@@ -44,6 +44,16 @@ object LinkFlow {
             Toast.show(if (url == null) "Aucun lien trouvé dans le texte." else "Ce lien ne vient pas d'un site de fics pris en charge.")
             onDone(false); return
         }
+        val info = resolved.second
+        val known = Library.get(info.ficId)?.chapters?.isNotEmpty() == true
+        if (info.site == Site.FFN && !known) {
+            // FanFiction.net bloque la lecture invisible : la page s'ouvre, et la fic est lue directement dessus
+            pending = Pending(url, info.ficId, shelf, read, download)
+            Toast.show("Ouverture de la page : la fic s'ouvrira dans Ohara dès qu'elle sera affichée.")
+            Nav.openBrowser(url)
+            onDone(false)
+            return
+        }
         working = true
         Toast.show("Ouverture de la fic…")
         AppScope.launch {

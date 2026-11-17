@@ -38,18 +38,36 @@ object Http {
     val userAgent: String
         get() = ua ?: "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Mobile Safari/537.36"
 
+    /**
+     * FanFiction.net renvoie les téléphones vers sa version mobile (m.fanfiction.net), qu'Ohara ne sait pas lire :
+     * pour ce site, Ohara se présente comme un ordinateur (même moteur Chrome), partout et toujours de la même façon,
+     * pour que la vérification anti-robot passée dans le navigateur reste valable.
+     */
+    fun isFfn(url: String): Boolean = runCatching { java.net.URI(url).host?.lowercase()?.endsWith("fanfiction.net") == true }.getOrDefault(false)
+
+    val desktopUserAgent: String
+        get() {
+            val chrome = Regex("Chrome/[\\d.]+").find(userAgent)?.value ?: "Chrome/130.0.0.0"
+            return "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) $chrome Safari/537.36"
+        }
+
+    fun userAgentFor(url: String): String = if (isFfn(url)) desktopUserAgent else userAgent
+
+    /** Adresse de la version ordinateur de FanFiction.net. */
+    fun desktopUrl(url: String): String = url.replaceFirst(Regex("^(https?://)(m\\.)?fanfiction\\.net", RegexOption.IGNORE_CASE), "https://www.fanfiction.net")
+
     fun get(
         url: String,
         referer: String? = null,
         accept: String = "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
     ): Page {
-        var current = url
+        var current = if (isFfn(url)) desktopUrl(url) else url
         repeat(6) {
             val conn = (URL(current).openConnection() as HttpURLConnection).apply {
                 connectTimeout = 15000
                 readTimeout = 30000
                 instanceFollowRedirects = false
-                setRequestProperty("User-Agent", userAgent)
+                setRequestProperty("User-Agent", userAgentFor(current))
                 setRequestProperty("Accept", accept)
                 setRequestProperty("Accept-Language", "en-US,en;q=0.9,fr;q=0.8")
                 setRequestProperty("Accept-Encoding", "gzip")
@@ -66,7 +84,7 @@ object Http {
                 }
                 if (code in 300..399) {
                     val loc = conn.getHeaderField("Location") ?: return Page(code, "", current)
-                    current = URL(URL(current), loc).toString()
+                    current = URL(URL(current), loc).toString().let { if (isFfn(it)) desktopUrl(it) else it }
                     return@repeat
                 }
                 val stream = if (code >= 400) conn.errorStream else conn.inputStream

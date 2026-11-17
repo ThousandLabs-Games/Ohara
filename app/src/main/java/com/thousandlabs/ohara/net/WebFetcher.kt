@@ -62,7 +62,7 @@ object WebFetcher {
             blockNetworkImage = true
             loadsImagesAutomatically = false
             mediaPlaybackRequiresUserGesture = true
-            userAgentString = Http.userAgent
+            userAgentString = Http.userAgentFor(url)
         }
         CookieManager.getInstance().setAcceptCookie(true)
         CookieManager.getInstance().setAcceptThirdPartyCookies(web, true)
@@ -112,6 +112,6 @@ object WebFetcher {
 
         handler.postDelayed({ done(Result.failure(if (sawChallenge) VerificationNeeded(url) else IOException("La page met trop de temps à répondre."))) }, timeoutMs + 5000)
         cont.invokeOnCancellation { handler.post { done(Result.failure(IOException("Annulé"))) } }
-        web.loadUrl(url)
+        web.loadUrl(if (Http.isFfn(url)) Http.desktopUrl(url) else url)
     }
 }
