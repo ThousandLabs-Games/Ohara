@@ -139,6 +139,7 @@ private class FfnFeed(val q: SearchQuery, val note: (SiteNote) -> Unit) : Feed(S
             if (q.fandom.isNotBlank()) {
                 fandomUrl = FandomIndex.urlFor(q.fandom)
                 if (fandomUrl == null) {
+                    if (!FandomIndex.ready) note(SiteNote(site, "Préparation de l'index des fandoms de FanFiction.net (une seule fois, environ une minute)…"))
                     FandomIndex.ensure()
                     fandomUrl = FandomIndex.urlFor(q.fandom)
                 }

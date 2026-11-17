@@ -112,7 +112,7 @@ val SEARCH_ENGINES = listOf(
  */
 object BrowserHolder {
     var web: WebView? = null
-    var pendingUrl: String? = null
+    var pendingUrl by mutableStateOf<String?>(null)
     /** Une vérification anti-robot est en cours pour un téléchargement. */
     var verifying by mutableStateOf(false)
     var url by mutableStateOf("")
