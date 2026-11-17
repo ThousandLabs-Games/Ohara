@@ -1,5 +1,7 @@
 package com.thousandlabs.ohara.ui
 
+import androidx.compose.material3.Slider
+import androidx.compose.material.icons.automirrored.outlined.MenuBook
 import android.content.Intent
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -29,7 +31,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.HelpOutline
-import androidx.compose.material.icons.automirrored.outlined.MenuBook
 import androidx.compose.material.icons.automirrored.outlined.OpenInNew
 import androidx.compose.material.icons.outlined.AddLink
 import androidx.compose.material.icons.outlined.BarChart
@@ -120,6 +121,7 @@ fun SettingsTab() {
                 TextButton(onClick = { Nav.push(Screen.Settings("maj")) }) { Text("Voir") }
             })
             SectionTitle("Lecture et apparence")
+            SettingRow("Lecture", "Chapitre suivant en glissant, mode lecture, « Précédemment », plein écran", Icons.AutoMirrored.Outlined.MenuBook, onClick = { Nav.push(Screen.Settings("lecture")) })
             SettingRow("Apparence", "Thème, couleur, icône de l'appli", Icons.Outlined.Palette, onClick = { Nav.push(Screen.Settings("apparence")) })
             SectionTitle("Découverte")
             SettingRow("Filtre anti-déchets", "Harem, fics « react », fics chinoises récentes, genres et auteurs", Icons.Outlined.FilterAlt, onClick = { Nav.push(Screen.Settings("filtre")) })
@@ -159,13 +161,14 @@ fun SettingsDetailScreen(section: String) {
     val pv by Prefs.version.collectAsState()
     @Suppress("UNUSED_EXPRESSION") pv
     val title = when (section) {
-        "apparence" -> "Apparence"; "filtre" -> "Filtre anti-déchets"; "masquage" -> "Passages masqués"
+        "lecture" -> "Lecture"; "apparence" -> "Apparence"; "filtre" -> "Filtre anti-déchets"; "masquage" -> "Passages masqués"
         "telechargement" -> "Téléchargements"; "confidentialite" -> "Bloqueur et anti-pistage"; "sauvegarde" -> "Sauvegarde"
         "sources" -> "Sites ajoutés"; "maj" -> "Mises à jour"; "avance" -> "Navigation libre"; "score" -> "Score « Prometteuse »"; else -> "Réglages"
     }
     Scaffold(topBar = { BackTopBar(title) }) { pad ->
         Column(Modifier.fillMaxSize().padding(pad).verticalScroll(rememberScrollState()).padding(bottom = 48.dp)) {
             when (section) {
+                "lecture" -> ReadingSection()
                 "apparence" -> AppearanceSection()
                 "filtre" -> FilterSection()
                 "masquage" -> MaskingSection()
@@ -196,12 +199,25 @@ fun AppIcon(bg: Int, fg: Int, size: Int = 64) {
     }
 }
 
+@Composable
+private fun ReadingSection() {
+    SectionTitle("Pendant la lecture")
+    SwitchRow("Cacher les barres en lisant", "Les barres du haut et du bas disparaissent quand vous descendez dans une page, et reviennent quand vous remontez", BrowserHolder.autoHideBars) { BrowserHolder.autoHideBars = it }
+    SwitchRow("Glisser pour changer de chapitre", "Tout en bas d'un chapitre, continuez à faire défiler vers le bas en gardant le doigt une seconde : chapitre suivant. Tout en haut, continuez vers le haut : chapitre précédent", PageTools.pullNav) { PageTools.pullNav = it }
+    SectionTitle("Mode lecture")
+    SwitchRow("Toujours ouvrir les chapitres en mode lecture", "Seulement le texte, avec votre police, votre taille et votre thème. Réglez l'affichage depuis le menu du navigateur, en mode lecture", PageTools.autoReader) { PageTools.autoReader = it }
+    SectionTitle("Reprendre une fic")
+    SwitchRow("Proposer « Précédemment »", "Quand vous rouvrez une fic laissée depuis ${Recap.afterDays} jours, un résumé des derniers chapitres lus s'affiche", Recap.enabled) { Recap.enabled = it }
+    if (Recap.enabled) {
+        Text("Après ${Recap.afterDays} jours sans l'ouvrir", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(horizontal = 16.dp))
+        Slider(Recap.afterDays.toFloat(), { Recap.afterDays = it.toInt() }, valueRange = 1f..30f, steps = 28, modifier = Modifier.padding(horizontal = 16.dp))
+    }
+}
+
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun AppearanceSection() {
     val context = LocalContext.current
-    SectionTitle("Navigateur")
-    SwitchRow("Cacher les barres en lisant", "Les barres du haut et du bas disparaissent quand vous descendez dans une page, et reviennent quand vous remontez", BrowserHolder.autoHideBars) { BrowserHolder.autoHideBars = it }
     SectionTitle("Thème de l'appli")
     FlowRow(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         THEMES.forEachIndexed { i, t -> FilterChip(selected = Prefs.appTheme == i, onClick = { Prefs.appTheme = i }, label = { Text(t) }) }

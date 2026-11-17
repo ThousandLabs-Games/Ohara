@@ -1,5 +1,7 @@
 package com.thousandlabs.ohara.ui
 
+import androidx.compose.material.icons.outlined.History
+import androidx.compose.material.icons.automirrored.outlined.Send
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -121,6 +123,7 @@ fun FicScreen(ficId: String, preview: Fic?) {
 
     var menu by remember { mutableStateOf(false) }
     var exportSheet by remember { mutableStateOf(false) }
+    var claudeSheet by remember { mutableStateOf(false) }
     var hideGenre by remember { mutableStateOf(false) }
     var charDialog by remember { mutableStateOf<CharacterNote?>(null) }
     var charNew by remember { mutableStateOf(false) }
@@ -230,6 +233,14 @@ fun FicScreen(ficId: String, preview: Fic?) {
                     }
                     OutlinedButton(onClick = { Nav.push(Screen.Similar(fic)) }, modifier = Modifier.weight(1f)) {
                         Icon(Icons.Outlined.AutoAwesome, null); Spacer(Modifier.width(8.dp)); Text("Similaires")
+                    }
+                }
+                Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    androidx.compose.material3.FilledTonalButton(onClick = { claudeSheet = true }, modifier = Modifier.weight(1f)) {
+                        Icon(Icons.AutoMirrored.Outlined.Send, null); Spacer(Modifier.width(8.dp)); Text("Envoyer à Claude")
+                    }
+                    if (inLib != null && Recap.available(inLib)) OutlinedButton(onClick = { Recap.pending = inLib.id }, modifier = Modifier.weight(1f)) {
+                        Icon(Icons.Outlined.History, null); Spacer(Modifier.width(8.dp)); Text("Précédemment")
                     }
                 }
             }
@@ -358,6 +369,7 @@ fun FicScreen(ficId: String, preview: Fic?) {
     }
 
     if (exportSheet) ExportSheet(fic, inLib != null) { exportSheet = false }
+    if (claudeSheet) ClaudeSheet(inLib ?: fic) { claudeSheet = false }
 
     if (hideGenre) {
         val options = (types.map { it.label } + fic.genres + fic.tags.take(20)).distinctBy { it.lowercase() }

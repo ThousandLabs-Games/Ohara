@@ -50,6 +50,7 @@ import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.ArrowForward
 import androidx.compose.material.icons.automirrored.outlined.HelpOutline
 import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.automirrored.outlined.Send
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
@@ -695,7 +696,9 @@ fun BrowserHome() {
     }
     var bookmarkDialog by remember { mutableStateOf(false) }
     var readerStyle by remember { mutableStateOf(false) }
-    if (menu) BrowserMenu(t, context, onBookmark = { bookmarkDialog = true }, onReaderStyle = { readerStyle = true }) { menu = false }
+    var claudeFic by remember { mutableStateOf<String?>(null) }
+    if (menu) BrowserMenu(t, context, onBookmark = { bookmarkDialog = true }, onReaderStyle = { readerStyle = true }, onClaude = { claudeFic = it }) { menu = false }
+    claudeFic?.let { id -> Library.get(id)?.let { f -> ClaudeSheet(f) { claudeFic = null } } ?: run { claudeFic = null } }
     if (bookmarkDialog) BookmarkDialog(t.title.ifBlank { t.url }, t.url) { bookmarkDialog = false }
     if (readerStyle) ReaderStyleSheet(t) { readerStyle = false }
     h.linkMenu?.let { link -> LinkMenu(link, context) { h.linkMenu = null } }
@@ -967,7 +970,7 @@ fun MenuTile(icon: ImageVector, label: String, active: Boolean = false, enabled:
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
-private fun BrowserMenu(t: Tab, context: Context, onBookmark: () -> Unit, onReaderStyle: () -> Unit, onClose: () -> Unit) {
+private fun BrowserMenu(t: Tab, context: Context, onBookmark: () -> Unit, onReaderStyle: () -> Unit, onClaude: (String) -> Unit, onClose: () -> Unit) {
     val h = BrowserHolder
     val info = h.ficInfo(t.url)
     val inLib = info != null && Library.contains(info.ficId)
@@ -991,6 +994,12 @@ private fun BrowserMenu(t: Tab, context: Context, onBookmark: () -> Unit, onRead
                         onClose(); if (inLib) Nav.push(Screen.FicDetail(info.ficId)) else h.addCurrent(false)
                     }
                     MenuTile(Icons.Outlined.Download, "Télécharger la fic") { onClose(); h.addCurrent(true) }
+                    MenuTile(Icons.AutoMirrored.Outlined.Send, "Envoyer à Claude") {
+                        onClose()
+                        if (inLib) onClaude(info.ficId) else Toast.show("Ajoutez d'abord la fic à la bibliothèque (même menu), puis envoyez-la à Claude.")
+                    }
+                    if (inLib && Library.get(info.ficId)?.let { Recap.available(it) } == true)
+                        MenuTile(Icons.Outlined.History, "Précédemment") { onClose(); Recap.pending = info.ficId }
                 }
                 val fav = !t.isStart && com.thousandlabs.ohara.data.Bookmarks.contains(t.url)
                 MenuTile(Icons.Outlined.StarOutline, if (fav) "Dans les favoris" else "Ajouter aux favoris", active = fav, enabled = !t.isStart) {

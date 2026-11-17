@@ -290,35 +290,54 @@ $points
         }
     }
 
-    private fun consignes(f: Fic, partCount: Int, range: Range): String {
+    /** Un modèle de consigne pour Claude. */
+    data class Prompt(val id: String, val label: String, val text: String)
+
+    fun prompts(f: Fic, partCount: Int, range: Range): List<Prompt> {
         val complete = f.status == FicStatus.COMPLETE
-        return """# Modèles de consignes pour Claude
+        val by = if (f.author.isNotBlank()) " de ${f.author}" else ""
+        val sent = "Je vous envoie la fiche, les personnages, mes passages surlignés et le texte en $partCount partie${if (partCount > 1) "s" else ""} (chapitres ${range.from + 1} à ${range.to + 1})."
+        return listOf(
+            Prompt("continuer", "Continuer la fic",
+                "Voici « ${f.title} »$by, une fanfiction ${f.fandomLabel}${if (complete) " terminée" else " en cours"}.\n$sent\n" +
+                    "Lisez tout avant de répondre. Ensuite, écrivez le chapitre suivant en anglais, dans le même ton, le même rythme et la même façon de faire parler les personnages.\n" +
+                    "Gardez la cohérence avec les événements et les pouvoirs établis. Longueur visée : [environ 4 000 mots].\n" +
+                    "Ce que j'aimerais voir arriver : [vos idées, ou « à vous de choisir »]."),
+            Prompt("nouvelle", "Nouvelle fic, même ton",
+                "Voici « ${f.title} »$by.\n$sent\nInspirez-vous de son style (voix du narrateur, humour, longueur des scènes, façon de décrire les combats et les dialogues).\n" +
+                    "Écrivez le premier chapitre d'une nouvelle fic en anglais : [fandom, idée de départ, personnage principal].\n" +
+                    "Ne reprenez pas l'intrigue : seulement le ton et la qualité d'écriture."),
+            Prompt("resumer", "Résumer l'histoire",
+                "Voici « ${f.title} »$by.\n$sent\nRésumez en français l'intrigue jusqu'au dernier chapitre envoyé : personnages principaux, arcs en cours, mystères non résolus, et ce qui devrait logiquement arriver ensuite."),
+            Prompt("style", "Analyser le style",
+                "Voici « ${f.title} »$by.\n$sent\nDécrivez en français, précisément, ce qui fait le style de cette fic (narration, dialogues, rythme, vocabulaire, humour), pour que je puisse vous demander de l'imiter ensuite.")
+        )
+    }
 
-Copiez l'un de ces modèles dans la conversation, après avoir envoyé les fichiers du pack.
-Remplacez ce qui est entre crochets.
+    private fun consignes(f: Fic, partCount: Int, range: Range): String = buildString {
+        append("# Modèles de consignes pour Claude\n\n")
+        append("Copiez l'un de ces modèles dans la conversation, après avoir envoyé les fichiers du pack.\nRemplacez ce qui est entre crochets.\n")
+        prompts(f, partCount, range).forEachIndexed { i, p -> append("\n## ").append(i + 1).append(". ").append(p.label).append("\n\n").append(p.text).append('\n') }
+    }
 
-## 1. Continuer la fic
-
-Voici « ${f.title} »${if (f.author.isNotBlank()) " de ${f.author}" else ""}, une fanfiction ${f.fandomLabel}${if (complete) " terminée" else " en cours"}.
-Je vous envoie la fiche, les personnages, mes passages surlignés et le texte en $partCount partie${if (partCount > 1) "s" else ""} (chapitres ${range.from + 1} à ${range.to + 1}).
-Lisez tout avant de répondre. Ensuite, écrivez le chapitre suivant en anglais, dans le même ton, le même rythme et la même façon de faire parler les personnages.
-Gardez la cohérence avec les événements et les pouvoirs établis. Longueur visée : [environ 4 000 mots].
-Ce que j'aimerais voir arriver : [vos idées, ou « à vous de choisir »].
-
-## 2. Écrire une nouvelle fic dans le même ton
-
-Inspirez-vous du style de « ${f.title} » (voix du narrateur, humour, longueur des scènes, façon de décrire les combats et les dialogues).
-Écrivez le premier chapitre d'une nouvelle fic en anglais : [fandom, idée de départ, personnage principal].
-Ne reprenez pas l'intrigue : seulement le ton et la qualité d'écriture.
-
-## 3. Résumer où en est l'histoire
-
-Résumez l'intrigue jusqu'au dernier chapitre envoyé : personnages principaux, arcs en cours, mystères non résolus, et ce qui devrait logiquement arriver ensuite.
-
-## 4. Analyser le style
-
-Décrivez précisément ce qui fait le style de cette fic (narration, dialogues, rythme, vocabulaire, humour), pour que je puisse vous demander de l'imiter ensuite.
-"""
+    /**
+     * Fichiers séparés pour « Envoyer à Claude » (l'appli Claude ne lit pas les archives) :
+     * fiche, personnages, surlignages, puis le texte en parties.
+     */
+    suspend fun claudeFiles(context: Context, f0: Fic, range: Range, onProgress: (String) -> Unit = {}): Pair<List<File>, Int> {
+        ensureChapters(f0, range) { d, t -> if (t > 0) onProgress("Téléchargement des chapitres manquants : $d/$t") }
+        val f = Library.get(f0.id) ?: f0
+        onProgress("Préparation des fichiers…")
+        val dir = File(context.cacheDir, "claude").apply { deleteRecursively(); mkdirs() }
+        val base = fileName(f, Format.TXT).removeSuffix(".txt").take(50).trim()
+        val parts = parts(f, range, Prefs.packWordsPerPart.coerceAtLeast(5000))
+        val out = mutableListOf<File>()
+        fun put(name: String, text: String) { out += File(dir, name).apply { writeText(text) } }
+        put("1 - $base - fiche.md", fiche(f))
+        if (f.characterNotes.isNotEmpty() || f.characters.isNotEmpty()) put("2 - $base - personnages.md", personnages(f))
+        if (f.highlights.isNotEmpty()) put("3 - $base - surlignages.md", surlignages(f))
+        parts.forEachIndexed { i, (r, text) -> put("${4 + i} - $base - partie ${i + 1} (ch. ${r.first + 1}-${r.last + 1}).txt", text) }
+        return out to parts.size
     }
 
     private fun lisezMoi(f: Fic, parts: List<Pair<IntRange, String>>): String = buildString {

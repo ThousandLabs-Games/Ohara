@@ -85,6 +85,7 @@ object Nav {
             f.resumeUrl.isNotBlank() -> f.resumeUrl
             else -> f.chapters.getOrNull(f.progressChapter)?.url ?: runCatching { src.chapterUrl(f, f.progressChapter) }.getOrDefault(f.url)
         }
+        if (chapter == null) Recap.maybeShow(f)
         com.thousandlabs.ohara.data.Library.update(ficId) { it.copy(lastOpened = System.currentTimeMillis(), newChapters = 0, completedAlert = false) }
         openBrowser(url.ifBlank { f.url })
     }

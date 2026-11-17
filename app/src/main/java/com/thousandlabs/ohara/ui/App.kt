@@ -103,6 +103,7 @@ fun OharaRoot() {
                     }
                 }
                 }
+                Recap.pending?.let { id -> RecapSheet(id) { Recap.pending = null } }
                 SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = 80.dp))
                 if (Locker.locked) LockScreen()
             }

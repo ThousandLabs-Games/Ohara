@@ -1,6 +1,15 @@
 package com.thousandlabs.ohara.ui
 
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.*
+import androidx.compose.material3.*
+import androidx.compose.material.icons.outlined.*
+import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.clickable
+import androidx.compose.ui.text.style.TextOverflow
+import com.thousandlabs.ohara.data.Fic
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -64,7 +73,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import com.thousandlabs.ohara.data.Fic
 import com.thousandlabs.ohara.data.Library
 import com.thousandlabs.ohara.data.Prefs
 import com.thousandlabs.ohara.data.Shelves
@@ -114,6 +122,7 @@ fun LibraryTab() {
     var siteFilter by rememberSaveable { mutableStateOf("") }
     var searching by rememberSaveable { mutableStateOf(false) }
     var query by rememberSaveable { mutableStateOf("") }
+    var coll by rememberSaveable { mutableStateOf("") }
     var selection by remember { mutableStateOf(setOf<String>()) }
     var menu by remember { mutableStateOf(false) }
     var sortMenu by remember { mutableStateOf(false) }
@@ -123,8 +132,11 @@ fun LibraryTab() {
     @Suppress("UNUSED_EXPRESSION") pv
     val sort = LibSort.entries[sortIdx.coerceIn(0, LibSort.entries.lastIndex)]
 
-    val shown = remember(fics, shelf, sort, onlyNew, query, siteFilter, pv) {
+    val collections = remember(fics, pv) { com.thousandlabs.ohara.discover.Collections.build(fics) }
+    val currentColl = collections.firstOrNull { it.id == coll }
+    val shown = remember(fics, shelf, sort, onlyNew, query, siteFilter, pv, currentColl) {
         var l = fics
+        if (currentColl != null) l = l.filter { it.id in currentColl.ids }
         if (shelf.isNotEmpty()) l = l.filter { shelf in it.shelves }
         if (onlyNew) l = l.filter { it.newChapters > 0 || it.completedAlert }
         if (siteFilter.isNotEmpty()) l = l.filter { it.site.code == siteFilter }
@@ -240,6 +252,13 @@ fun LibraryTab() {
                     FilterChip(selected = siteFilter == s.code, onClick = { siteFilter = if (siteFilter == s.code) "" else s.code }, label = { Text(s.short) })
                 }
             }
+            if (currentColl != null) {
+                Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 2.dp)) {
+                    InputChip(selected = true, onClick = { coll = "" }, label = { Text("Collection : ${currentColl.title}") },
+                        leadingIcon = { Icon(Icons.Outlined.AutoAwesomeMosaic, null, Modifier.size(18.dp)) },
+                        trailingIcon = { Icon(Icons.Outlined.Close, "Quitter la collection", Modifier.size(18.dp)) })
+                }
+            }
             if (check.running) {
                 Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp)) {
                     Text("Vérification ${check.done + 1}/${check.total} : ${check.current}", style = MaterialTheme.typography.bodySmall, maxLines = 1)
@@ -283,6 +302,13 @@ fun LibraryTab() {
                     fics.filter { it.lastOpened > 0 && Shelves.DONE !in it.shelves && Shelves.ABANDONED !in it.shelves }.maxByOrNull { it.lastOpened } else null
                 LazyColumn(Modifier.fillMaxSize(), contentPadding = ListPadding) {
                     if (resume != null) item(key = "reprendre") { ResumeCard(resume) }
+                    if (collections.isNotEmpty() && currentColl == null && shelf.isEmpty() && query.isBlank() && !onlyNew && selection.isEmpty()) item(key = "collections") {
+                        Text("Collections", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(start = 16.dp, top = 10.dp, bottom = 6.dp))
+                        LazyRow(contentPadding = PaddingValues(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            items(collections, key = { it.id }) { c -> CollectionCard(c, fics) { coll = c.id } }
+                        }
+                        Spacer(Modifier.height(8.dp))
+                    }
                     items(shown, key = { it.id }) { f ->
                         FicRow(
                             f, showProgress = true, selected = f.id in selection,
@@ -484,5 +510,24 @@ private fun ResumeCard(f: Fic) {
                 Icon(Icons.Outlined.PlayArrow, "Reprendre")
             }
         }
+    }
+}
+
+
+/** Carte d'une collection automatique : trois couvertures, le titre et le nombre de fics. */
+@Composable
+private fun CollectionCard(c: com.thousandlabs.ohara.discover.Collections.Coll, fics: List<Fic>, onClick: () -> Unit) {
+    val cs = MaterialTheme.colorScheme
+    val covers = remember(c, fics) { fics.filter { it.id in c.ids }.sortedByDescending { maxOf(it.lastOpened, it.updated) }.take(3) }
+    Column(Modifier.width(158.dp).clip(RoundedCornerShape(16.dp)).background(cs.surfaceContainerHigh).clickable(onClick = onClick).padding(10.dp)) {
+        Box(Modifier.fillMaxWidth().height(78.dp)) {
+            covers.forEachIndexed { i, f ->
+                Box(Modifier.padding(start = (i * 34).dp).clip(RoundedCornerShape(8.dp))) { CoverTile(f, 56.dp) }
+            }
+        }
+        Spacer(Modifier.height(8.dp))
+        Text(c.title, style = MaterialTheme.typography.labelLarge, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        Text("${Fmt.plural(c.size, "fic")} · ${c.subtitle}", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant,
+            maxLines = 2, overflow = TextOverflow.Ellipsis)
     }
 }
