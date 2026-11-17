@@ -18,6 +18,8 @@ android {
         versionCode = buildNumber
         versionName = "1.$buildNumber"
         vectorDrawables { useSupportLibrary = true }
+        // téléphones Android 64 bits seulement (dont le Tecno) : la traduction pèse 16 Mo par architecture
+        ndk { abiFilters += listOf("arm64-v8a") }
     }
 
     signingConfigs {
