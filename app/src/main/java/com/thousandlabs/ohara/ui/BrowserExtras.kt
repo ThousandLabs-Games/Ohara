@@ -8,6 +8,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.thousandlabs.ohara.data.Prefs
+import com.thousandlabs.ohara.translate.Names
 import com.thousandlabs.ohara.translate.Translate
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -58,6 +59,15 @@ scan();window.__ohTrT=setInterval(scan,2500);
 
     fun inject(w: WebView) { if (Translate.enabled) w.evaluateJavascript(JS, null) }
 
+    /** Retraduit la page ouverte (après un changement dans les noms à ne pas traduire). */
+    fun retranslate(w: WebView) {
+        Translate.namesChanged()
+        synchronized(cache) { cache.clear() }
+        if (!Translate.enabled) return
+        restore(w)
+        inject(w)
+    }
+
     fun restore(w: WebView) {
         generation++
         status = null
@@ -77,7 +87,8 @@ scan();window.__ohTrT=setInterval(scan,2500);
                         if (gen != generation || !Translate.enabled) break
                         val o = items.getJSONObject(k)
                         val src = o.optString("t")
-                        val fr = cache[src] ?: Translate.text(src).also { cache[src] = it }
+                        val key = Names.signature() + "\u0000" + src
+                        val fr = cache[key] ?: Translate.text(src).also { cache[key] = it }
                         web.evaluateJavascript("if(window.__ohTr)window.__ohTr.set(${o.optInt("i")},${JSONObject.quote(fr)})", null)
                     }
                 } catch (e: Exception) {

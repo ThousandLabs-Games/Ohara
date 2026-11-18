@@ -62,6 +62,8 @@ object Translate {
 
     private fun saveCache(ficId: String, ch: Int, o: JSONObject) = runCatching { File(dir(ficId), "$ch.json").writeText(o.toString()) }
 
+    private const val NAMES_KEY = "\u0000noms"
+
     fun hasCache(ficId: String, ch: Int) = File(dir(ficId), "$ch.json").exists()
 
     fun deleteFor(ficId: String) { dir(ficId).deleteRecursively() }
@@ -79,14 +81,30 @@ object Translate {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, String>?) = size > 6000
     }
 
+    /**
+     * Traduction d'un texte, avec les noms protégés (personnages, îles, techniques…) gardés tels quels.
+     * Si le traducteur abîme un repère, le texte est traduit sans protection plutôt que de rester en anglais.
+     */
+    private suspend fun raw(s: String): String {
+        val p = Names.protect(s)
+        if (p.isEmpty) return client.translate(s).await()
+        // Paragraphe fait seulement de noms (« Usopp ! ») : rien à traduire.
+        if (!Regex("\\p{L}{2}").containsMatchIn(p.text)) return s
+        return p.restore(client.translate(p.text).await()) ?: client.translate(s).await()
+    }
+
     /** Traduit un texte court (un paragraphe) ; les textes déjà vus sont rendus aussitôt. */
     suspend fun text(s: String): String {
-        synchronized(memo) { memo[s] }?.let { return it }
+        val key = Names.signature() + "\u0000" + s
+        synchronized(memo) { memo[key] }?.let { return it }
         ensureModel()
-        val r = client.translate(s).await()
-        synchronized(memo) { memo[s] = r }
+        val r = raw(s)
+        synchronized(memo) { memo[key] = r }
         return r
     }
+
+    /** La liste des noms a changé : les traductions gardées en mémoire sont refaites. */
+    fun namesChanged() { synchronized(memo) { memo.clear() } }
 
     /** Le modèle est-il déjà sur le téléphone ? (sinon la première traduction le télécharge) */
     val modelOnPhone: Boolean get() = modelReady || Prefs.getBool("fr_model_ok", false)
@@ -97,7 +115,9 @@ object Translate {
      */
     suspend fun chapter(ficId: String, ch: Int, html: String, onProgress: (String) -> Unit = {}): String {
         ensureModel(onProgress)
-        val cache = withContext(Dispatchers.IO) { loadCache(ficId, ch) }
+        // Les traductions gardées ne valent que pour la liste de noms avec laquelle elles ont été faites.
+        val sig = Names.signature()
+        val cache = withContext(Dispatchers.IO) { loadCache(ficId, ch) }.let { if (it.optString(NAMES_KEY) == sig) it else JSONObject().put(NAMES_KEY, sig) }
         val doc = withContext(Dispatchers.Default) { Jsoup.parseBodyFragment(html) }
         val list = leaves(doc.body()).ifEmpty { listOf(doc.body()) }
         var changed = false
@@ -106,7 +126,7 @@ object Translate {
             if (src.isEmpty() || !src.any { it.isLetter() }) return@forEachIndexed
             val fr = cache.optString(src).takeIf { it.isNotEmpty() } ?: run {
                 if (i % 10 == 0) onProgress("Traduction : ${i + 1}/${list.size} paragraphes…")
-                client.translate(src).await().also { cache.put(src, it); changed = true }
+                raw(src).also { cache.put(src, it); changed = true }
             }
             el.text(fr)
         }

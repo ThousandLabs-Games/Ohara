@@ -17,6 +17,7 @@ Ohara réunit au même endroit la recherche, la lecture, le téléchargement et 
 - Lecture : barres cachées en descendant, chapitre suivant en continuant à faire défiler tout en bas (une seconde), précédent tout en haut, mode lecture (thème, police, taille, interligne, marges).
 - Bloqueur de publicités et de pisteurs (EasyList, EasyPrivacy, liste de Peter Lowe, Fanboy), anti-pistage proche de Brave.
 - Traduction en français en un bouton, sur le téléphone (rien n'est envoyé), pour toutes les pages tant qu'elle est activée.
+- Noms à ne pas traduire : personnages, îles, villages et techniques de One Piece et de Naruto gardés tels quels pendant la traduction (« Drum Island », « Usopp »), avec vos propres noms en plus (appui long sur un nom › « Ne pas traduire »).
 - Appui long sur une phrase › « Masquer » : elle disparaît tout de suite et dans les chapitres suivants. Promos et notes d'auteur masquées d'office.
 - « Masquer un élément » d'un site (bannières, encarts), comme sur Brave.
 - Réglages par site : chaque fonction (glissement entre chapitres, barres cachées, mode lecture, masquage, menu des liens, traduction) peut être coupée sur un site seulement.

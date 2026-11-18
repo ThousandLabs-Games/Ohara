@@ -50,6 +50,7 @@ import androidx.compose.material.icons.outlined.Public
 import androidx.compose.material.icons.outlined.Restore
 import androidx.compose.material.icons.outlined.Shield
 import androidx.compose.material.icons.outlined.SystemUpdate
+import androidx.compose.material.icons.outlined.Translate
 import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -93,6 +94,7 @@ import com.thousandlabs.ohara.download.UpdateChecker
 import com.thousandlabs.ohara.privacy.AdBlocker
 import com.thousandlabs.ohara.privacy.Privacy
 import com.thousandlabs.ohara.sources.GenericSource
+import com.thousandlabs.ohara.translate.Names
 import com.thousandlabs.ohara.update.AppUpdater
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -123,6 +125,8 @@ fun SettingsTab() {
             SectionTitle("Lecture et apparence")
             SettingRow("Lecture", "Chapitre suivant en glissant, mode lecture, « Précédemment », plein écran", Icons.AutoMirrored.Outlined.MenuBook, onClick = { Nav.push(Screen.Settings("lecture")) })
             SettingRow("Apparence", "Thème, couleur, icône de l'appli", Icons.Outlined.Palette, onClick = { Nav.push(Screen.Settings("apparence")) })
+            SettingRow("Noms à ne pas traduire", if (!Names.enabled) "Désactivé" else (Names.FANDOMS.filter { it.enabled }.map { it.label } + listOfNotNull(Names.userNames.size.takeIf { it > 0 }?.let { Fmt.plural(it, "nom perso") }))
+                .joinToString(", ").ifBlank { "Aucune liste active" }, Icons.Outlined.Translate, onClick = { Nav.push(Screen.Settings("noms")) })
             SectionTitle("Découverte")
             SettingRow("Filtre anti-déchets", "Harem, fics « react », fics chinoises récentes, genres et auteurs", Icons.Outlined.FilterAlt, onClick = { Nav.push(Screen.Settings("filtre")) })
             SettingRow("Fics masquées", "Dossier « Masquées » et liste blanche", Icons.Outlined.VisibilityOff, onClick = { Nav.push(Screen.Hidden) })
@@ -163,7 +167,7 @@ fun SettingsDetailScreen(section: String) {
     val title = when (section) {
         "lecture" -> "Lecture"; "apparence" -> "Apparence"; "filtre" -> "Filtre anti-déchets"; "masquage" -> "Passages masqués"
         "telechargement" -> "Téléchargements"; "confidentialite" -> "Bloqueur et anti-pistage"; "sauvegarde" -> "Sauvegarde"
-        "sources" -> "Sites ajoutés"; "maj" -> "Mises à jour"; "avance" -> "Navigation libre"; "score" -> "Score « Prometteuse »"; else -> "Réglages"
+        "sources" -> "Sites ajoutés"; "maj" -> "Mises à jour"; "avance" -> "Navigation libre"; "score" -> "Score « Prometteuse »"; "noms" -> "Noms à ne pas traduire"; else -> "Réglages"
     }
     Scaffold(topBar = { BackTopBar(title) }) { pad ->
         Column(Modifier.fillMaxSize().padding(pad).verticalScroll(rememberScrollState()).padding(bottom = 48.dp)) {
@@ -179,6 +183,7 @@ fun SettingsDetailScreen(section: String) {
                 "maj" -> UpdateSection()
                 "avance" -> AdvancedSection()
                 "score" -> ScoreSection()
+                "noms" -> NamesSection()
             }
         }
     }
@@ -556,4 +561,51 @@ private fun ScoreSection() {
     TextButton(onClick = { sc.reset(); Toast.show("Valeurs d'origine rétablies.") }, modifier = Modifier.padding(horizontal = 8.dp)) { Text("Rétablir les valeurs d'origine") }
     Text("Sur la fiche d'une fic, touchez la ligne « Score » pour voir le détail du calcul.", Modifier.padding(horizontal = 16.dp),
         style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun NamesSection() {
+    var name by remember { mutableStateOf("") }
+    var showList by remember { mutableStateOf<String?>(null) }
+    NoteCard("Pendant la traduction, ces noms restent tels quels : « Drum Island » ne devient pas « l'île des tambours », « Usopp » reste « Usopp ». " +
+        "Les suffixes collés au nom (-san, -sensei, -chan…) restent avec lui. Les pages déjà ouvertes se retraduisent quand vous les rechargez.", icon = Icons.Outlined.Translate)
+    SwitchRow("Protéger les noms", "Personnages, îles, villages, techniques et titres", Names.enabled) { Names.enabled = it; BrowserHolder.retranslateOpenTab() }
+    if (Names.enabled) {
+        SectionTitle("Listes intégrées")
+        Names.FANDOMS.forEach { f ->
+            SwitchRow(f.label, "${Fmt.number(f.names.size.toLong())} noms · touchez « Voir » pour la liste", f.enabled) { f.enabled = it; BrowserHolder.retranslateOpenTab() }
+            TextButton(onClick = { showList = f.key }, modifier = Modifier.padding(horizontal = 8.dp)) { Text("Voir la liste ${f.label}") }
+        }
+        SectionTitle("Vos noms")
+        Row(Modifier.padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+            OutlinedTextField(name, { name = it }, label = { Text("Nom, lieu ou terme") }, singleLine = true, modifier = Modifier.weight(1f))
+            TextButton(onClick = {
+                val n = Names.addUser(name)
+                if (n != null) { Toast.show("« $n » ne sera plus traduit."); BrowserHolder.retranslateOpenTab() }
+                name = ""
+            }, enabled = name.isNotBlank()) { Text("Ajouter") }
+        }
+        Text("Écrivez le nom comme dans le texte anglais, avec ses majuscules. Écrit tout en minuscules (chakra), il est reconnu avec ou sans majuscule. " +
+            "Dans le navigateur, sur une page en anglais (traduction coupée), faites un appui long sur un nom puis « Ne pas traduire ».",
+            Modifier.padding(horizontal = 16.dp, vertical = 4.dp), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        val mine = Names.userNames
+        if (mine.isEmpty()) Text("Aucun nom ajouté.", Modifier.padding(16.dp), style = MaterialTheme.typography.bodySmall)
+        mine.forEach { n ->
+            SettingRow(n, null) { IconButton(onClick = { Names.removeUser(n); BrowserHolder.retranslateOpenTab() }) { Icon(Icons.Outlined.Delete, "Retirer") } }
+        }
+    }
+    showList?.let { key ->
+        val f = Names.FANDOMS.first { it.key == key }
+        AlertDialog(
+            onDismissRequest = { showList = null },
+            title = { Text("Liste ${f.label}") },
+            text = {
+                Column(Modifier.verticalScroll(rememberScrollState())) {
+                    Text(f.names.distinct().sortedBy { it.lowercase() }.joinToString(" · "), style = MaterialTheme.typography.bodySmall)
+                }
+            },
+            confirmButton = { TextButton(onClick = { showList = null }) { Text("Fermer") } }
+        )
+    }
 }

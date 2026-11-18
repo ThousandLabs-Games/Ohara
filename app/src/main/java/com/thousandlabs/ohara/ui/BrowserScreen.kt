@@ -148,6 +148,7 @@ import com.thousandlabs.ohara.privacy.Privacy
 import com.thousandlabs.ohara.sources.GenericSource
 import com.thousandlabs.ohara.sources.LinkInfo
 import com.thousandlabs.ohara.sources.Sources
+import com.thousandlabs.ohara.translate.Names
 import com.thousandlabs.ohara.translate.Translate
 import org.json.JSONArray
 import org.json.JSONObject
@@ -225,6 +226,9 @@ object BrowserHolder {
 
     /** Navigateur visible (onglet actuel), s'il existe. */
     val web: WebView? get() = tabs.getOrNull(current)?.web
+
+    /** Les noms à ne pas traduire ont changé : la page affichée est retraduite tout de suite. */
+    fun retranslateOpenTab() { com.thousandlabs.ohara.translate.Translate.namesChanged(); web?.let { PageTranslator.retranslate(it) } }
 
     fun restore() {
         if (restored) return
@@ -978,6 +982,20 @@ private fun SelectionBar(t: Tab) {
                 IconButton(onClick = { t.web?.evaluateJavascript("var s=window.getSelection();if(s)s.removeAllRanges();", null); t.selection = null }) {
                     Icon(Icons.Outlined.Close, "Fermer")
                 }
+            }
+            // Un nom (quelques mots) : le garder tel quel pendant la traduction.
+            if (Names.looksLikeName(sel.first)) {
+                val n = Names.clean(sel.first) ?: ""
+                TextButton(onClick = {
+                    if (Translate.enabled) {
+                        Toast.show("Coupez d'abord la traduction, puis sélectionnez « $n » tel qu'il est écrit en anglais.")
+                    } else {
+                        Names.addUser(n)
+                        Toast.show("« $n » ne sera plus traduit. Réglages › Noms à ne pas traduire pour le retirer.")
+                        t.web?.evaluateJavascript("var s=window.getSelection();if(s)s.removeAllRanges();", null); t.selection = null
+                        BrowserHolder.retranslateOpenTab()
+                    }
+                }) { Icon(Icons.Outlined.Translate, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text("Ne pas traduire « ${n.take(30)} »", maxLines = 1, overflow = TextOverflow.Ellipsis) }
             }
         }
     }
