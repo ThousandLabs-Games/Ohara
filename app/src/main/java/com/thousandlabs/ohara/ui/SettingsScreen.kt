@@ -313,6 +313,7 @@ private fun FilterSection() {
 private fun MaskingSection() {
     SwitchRow("Replier les promos automatiquement", "Patreon, Ko-fi, Discord, chapitres en avance, votes WebNovel", Masking.autoPromo) { Masking.autoPromo = it }
     SwitchRow("Replier les notes d'auteur", "« A/N », « Author's note »… y compris sur plusieurs paragraphes", Masking.authorNotes) { Masking.authorNotes = it }
+    SwitchRow("Masquer l'annonce du prochain chapitre", "En fin de chapitre seulement : « Chapter 51: titre », « Next chapter: … », avec le titre (y compris sur la ligne suivante). Jamais le titre en haut du chapitre", Masking.nextChapter) { Masking.nextChapter = it }
     SwitchRow("Retirer ces passages des exports", "EPUB, TXT et Pack Claude sans les promos", Masking.removeInExports) { Masking.removeInExports = it }
     SwitchRow("Laisser un repère", "Une ligne discrète « passage masqué » à toucher pour le lire ; sinon le passage disparaît complètement", Masking.showMarker) { Masking.showMarker = it }
     NoteCard("Une règle reconnaît le passage même si un nombre change (« 10 chapitres d'avance » / « 12 chapitres d'avance ») ou si quelques mots diffèrent. Les notes d'auteur sur plusieurs paragraphes, en début ou en fin de chapitre, sont masquées en entier.")

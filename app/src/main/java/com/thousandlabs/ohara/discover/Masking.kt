@@ -35,6 +35,20 @@ object Masking {
 
     var autoPromo: Boolean get() = Prefs.getBool("mask_promo", true); set(v) = Prefs.putBool("mask_promo", v)
     var authorNotes: Boolean get() = Prefs.getBool("mask_an", true); set(v) = Prefs.putBool("mask_an", v)
+    /** Annonce du prochain chapitre (« Chapter 51: titre », « Next chapter: … ») masquée, en fin de chapitre seulement. */
+    var nextChapter: Boolean get() = Prefs.getBool("mask_next", true); set(v) = Prefs.putBool("mask_next", v)
+
+    /** Expressions communes au navigateur (JavaScript) et aux chapitres gardés : la même syntaxe sert aux deux. */
+    const val NEXT_CH = "^\\s*(?:(?:next|coming up|up next|preview|in the next)(?:\\s+(?:chapter|time|episode))?\\s*[:\\-–—]?\\s*)?" +
+        "(?:chapter|chap\\.?|ch\\.?|chapitre|episode|ep\\.)\\s*#?\\s*(?:\\d+|[ivxlc]+)(?![a-z])(?:\\s*[:\\-–—.|,]?\\s*.{0,200})?$"
+    const val NEXT_LABEL = "^\\s*(?:next time on [^:]{1,40}|next chapter|next time|coming up next|up next|in the next chapter|next chapter preview|preview)\\s*[:\\-–—]\\s*.{0,200}$"
+    /** « Chapter 51 » seul sur sa ligne : le titre est sur la ligne suivante. */
+    const val NEXT_ONLY = "^\\s*(?:(?:next|up next)(?:\\s+chapter)?\\s*[:\\-–—]?\\s*)?(?:chapter|chap\\.?|ch\\.?|chapitre|episode)\\s*#?\\s*(?:\\d+|[ivxlc]+)\\s*[:\\-–—.]?\\s*$" +
+        "|^\\s*(?:next chapter|next time|coming up next|up next|in the next chapter|next chapter preview|preview)\\s*[:\\-–—]?\\s*$"
+
+    private val RX_NEXT = Regex("$NEXT_CH|$NEXT_LABEL", RegexOption.IGNORE_CASE)
+    private val RX_NEXT_ONLY = Regex(NEXT_ONLY, RegexOption.IGNORE_CASE)
+
     var removeInExports: Boolean get() = Prefs.getBool("mask_export", true); set(v) = Prefs.putBool("mask_export", v)
     /** Garder un petit repère « passage masqué » à la place (sinon le passage disparaît complètement). */
     var showMarker: Boolean get() = Prefs.getBool("mask_marker", false); set(v) = Prefs.putBool("mask_marker", v)
@@ -190,6 +204,23 @@ object Masking {
             val from = list.size - 12
             val tail = (maxOf(0, from) until list.size).firstOrNull { AUTHOR_NOTE.containsMatchIn(texts[it]) }
             if (tail != null) for (i in tail until list.size) flagged[i] = true
+        }
+        // Annonce du prochain chapitre : seulement dans le dernier tiers du texte et les derniers blocs, jamais en début de chapitre.
+        if (nextChapter && list.size >= 3) {
+            var offset = 0
+            val starts = texts.map { t -> offset.also { offset += t.length } }
+            val first = maxOf(1, list.size - 12)
+            var i = first
+            while (i < list.size) {
+                val t = texts[i].trim()
+                val late = total < 1500 || starts[i] >= total * 0.66
+                if (late && t.length <= 250 && RX_NEXT.matches(t)) {
+                    flagged[i] = true
+                    // Numéro seul : le titre suit sur la ligne d'après.
+                    if (RX_NEXT_ONLY.matches(t) && i + 1 < list.size && texts[i + 1].trim().length <= 150) { flagged[i + 1] = true; i++ }
+                }
+                i++
+            }
         }
         var hidden = 0
         list.forEachIndexed { i, el ->

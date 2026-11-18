@@ -38,6 +38,9 @@ object PageMask {
         .put("an", Masking.authorNotes && info != null)
         .put("marker", Masking.showMarker)
         .put("re", PROMO)
+        .put("nc", Masking.nextChapter && info != null)
+        .put("ncre", Masking.NEXT_CH + "|" + Masking.NEXT_LABEL)
+        .put("ncone", Masking.NEXT_ONLY)
         .put("sel", info?.let { ReadTracker.mainSelector(it) } ?: "")
 
     /**
@@ -92,6 +95,14 @@ if(lf&&t.length<=900&&(bad(t,n,c,re)||(c.an&&AN.test(t)&&(i<6||i>list.length-10)
 var ss=segs(e,!lf);for(var k=ss.length-1;k>=0;k--){var sg=ss[k],st=sg.text,sn=norm(st);if(!sn)continue;
 if(st.length<=900&&bad(st,sn,c,re)){hideRange(rangeOf(sg,0,st.length));continue;}
 if(!c.rules.length)continue;var ph=sentences(st);for(var j=ph.length-1;j>=0;j--){var q=ph[j];if(c.rules.some(function(p){return match(norm(q.t),p);}))hideRange(rangeOf(sg,q.s,q.e));}}});}
+/* Annonce du prochain chapitre (« Chapter 51: titre ») : seulement dans le dernier tiers du chapitre, ligne par ligne. */
+function tail(){var c=window.__ohMaskCfg;if(!c.nc||c.off||!document.body)return;var re=new RegExp(c.ncre,'i'),one=new RegExp(c.ncone,'i');var r=root(c);
+var lines=[];cands(r).filter(leaf).forEach(function(e){if(e.getAttribute('data-oh-shown'))return;segs(e,false).forEach(function(sg){lines.push(sg);});});
+var total=0;lines.forEach(function(l){l.at=total;total+=l.text.length;});var from=Math.max(1,lines.length-15);
+for(var i=from;i<lines.length;i++){var l=lines[i],t=l.text.trim();if(!t||t.length>250)continue;if(total>=1500&&l.at<total*0.66)continue;
+if(!re.test(t))continue;var nx=lines[i+1];var two=one.test(t)&&nx&&nx.text.trim().length<=150;
+budget=Infinity;hideRange(rangeOf(l,0,l.text.length));if(two){hideRange(rangeOf(nx,0,nx.text.length));i++;}}}
+var scan0=scan;scan=function(){scan0();try{tail();}catch(x){}};
 window.__ohMaskScan=scan;scan();
 if(!window.__ohMaskT){window.__ohMaskT=setInterval(function(){if(window.__ohMaskScan)window.__ohMaskScan();},2500);}
 })(${cfg});"""
