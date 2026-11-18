@@ -34,19 +34,42 @@ object PageTranslator {
     /** Nouvelle page : le travail en cours pour l'ancienne est abandonné. */
     fun newPage() { generation++ }
 
+    /*
+     * La page est lue par phrases entières, pas par morceaux de texte : un mot en italique ou en gras au milieu
+     * d'une phrase coupait la phrase en trois bouts traduits chacun de son côté (mots mal placés, sens perdu).
+     * Chaque ligne d'un paragraphe (coupée par un retour à la ligne) est traduite d'un bloc ; la traduction s'écrit
+     * à la place du texte d'origine et la mise en forme interne à la phrase est simplifiée.
+     * Ce qui est à l'écran passe en premier.
+     */
     const val JS = """(function(){
 if(window.__ohTr){window.__ohTr.scan();return;}
-var nodes=[];
-function leafs(){var out=[];var w=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT,{acceptNode:function(n){
-if(n.__oh||!n.nodeValue||n.nodeValue.trim().length<2)return 2;if(!/[A-Za-z]{2}/.test(n.nodeValue))return 2;
-var p=n.parentElement;if(!p||p.closest('script,style,noscript,textarea,code,pre,select,option'))return 2;return 1;}});
-var n;while((n=w.nextNode()))out.push(n);return out;}
-function scan(){if(!document.body)return;var list=leafs();if(!list.length)return;var batch=[];
-list.slice(0,400).forEach(function(n){n.__oh=1;nodes.push(n);batch.push({i:nodes.length-1,t:n.nodeValue.trim()});});
+var units=[];
+var INL={A:1,ABBR:1,B:1,BDI:1,BDO:1,CITE:1,DFN:1,EM:1,FONT:1,I:1,KBD:1,MARK:1,Q:1,S:1,SAMP:1,SMALL:1,SPAN:1,STRIKE:1,STRONG:1,SUB:1,SUP:1,TIME:1,U:1,VAR:1,LABEL:1,INS:1,DEL:1,NOBR:1,WBR:1};
+var SKIP='script,style,noscript,textarea,code,pre,select,option,button,input';
+function blockOf(n){var p=n.parentElement;while(p&&INL[p.tagName]&&p.parentElement)p=p.parentElement;return p;}
+function ok(n){if(n.__oh||!n.nodeValue||!n.nodeValue.trim())return false;var p=n.parentElement;return !!p&&!p.closest(SKIP);}
+function unitsOf(b){var res=[],cur=[];var w=document.createTreeWalker(b,5,null);var n;
+while((n=w.nextNode())){if(n.nodeType===1){if(n.tagName==='BR'||!INL[n.tagName]){if(cur.length)res.push(cur);cur=[];}continue;}
+if(blockOf(n)!==b)continue;if(ok(n))cur.push(n);}
+if(cur.length)res.push(cur);return res;}
+function scan(){if(!document.body)return;var w=document.createTreeWalker(document.body,4,null);var n,blocks=[];
+while((n=w.nextNode())){if(!ok(n))continue;var b=blockOf(n);if(b&&!b.__ohS){b.__ohS=1;blocks.push(b);}}
+var fresh=[];blocks.forEach(function(b){b.__ohS=0;unitsOf(b).forEach(function(ns){ns.forEach(function(x){x.__oh=1;});
+var t=ns.map(function(x){return x.nodeValue;}).join('').replace(/\s+/g,' ').trim();
+if(t.length<2||!/[A-Za-z]{2}/.test(t))return;fresh.push({n:ns,b:b,t:t});});});
+if(!fresh.length)return;var h=window.innerHeight||800;
+fresh.forEach(function(u){var r=u.b.getBoundingClientRect();u.k=(r.bottom>0&&r.top<h)?r.top-100000:(r.top<0?h-r.top:r.top);});
+fresh.sort(function(x,y){return x.k-y.k;});
+var batch=[];fresh.slice(0,400).forEach(function(u){units.push(u);batch.push({i:units.length-1,t:u.t});});
+fresh.slice(400).forEach(function(u){u.n.forEach(function(x){x.__oh=0;});});
 OharaTr.texts(JSON.stringify(batch));}
 window.__ohTr={scan:scan,
-set:function(i,t){var n=nodes[i];if(!n)return;var v=n.nodeValue;var a=v.match(/^\s*/)[0],b=v.match(/\s*$/)[0];if(n.__orig==null)n.__orig=v;n.nodeValue=a+t+b;},
-restore:function(){nodes.forEach(function(n){if(n.__orig!=null){n.nodeValue=n.__orig;n.__orig=null;}n.__oh=0;});nodes=[];clearInterval(window.__ohTrT);window.__ohTr=null;}};
+set:function(i,t){var u=units[i];if(!u)return;var ns=u.n;var tg=null;
+for(var k=0;k<ns.length;k++){if(ns[k].parentElement===u.b){tg=ns[k];break;}}if(!tg)tg=ns[0];
+var a=ns[0].__orig!=null?ns[0].__orig:ns[0].nodeValue,z=ns[ns.length-1].__orig!=null?ns[ns.length-1].__orig:ns[ns.length-1].nodeValue;
+var lead=a.match(/^\s*/)[0],trail=z.match(/\s*$/)[0];
+ns.forEach(function(x){if(x.__orig==null)x.__orig=x.nodeValue;x.nodeValue=(x===tg)?lead+t+trail:'';});},
+restore:function(){units.forEach(function(u){u.n.forEach(function(x){if(x.__orig!=null){x.nodeValue=x.__orig;x.__orig=null;}x.__oh=0;});});units=[];clearInterval(window.__ohTrT);window.__ohTr=null;}};
 scan();window.__ohTrT=setInterval(scan,2500);
 })();"""
 

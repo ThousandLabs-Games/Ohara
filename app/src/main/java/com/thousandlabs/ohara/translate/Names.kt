@@ -13,11 +13,25 @@ import com.thousandlabs.ohara.data.Prefs
  */
 object Names {
 
-    class Fandom(val key: String, val label: String, val names: List<String>) {
+    /**
+     * names : gardés tels quels. terms : termes remplacés par leur équivalent officiel en français
+     * (« Devil Fruit » → « Fruit du démon »), au lieu d'être traduits mot à mot.
+     * patterns : familles de noms reconnues par leur forme (« … no Mi », « Gomu Gomu no … », « … no Jutsu »).
+     */
+    class Fandom(val key: String, val label: String, val names: List<String>,
+                 val terms: Map<String, String> = emptyMap(), val patterns: List<String> = emptyList()) {
         var enabled: Boolean
             get() = Prefs.getBool("names_$key", true)
             set(v) { Prefs.putBool("names_$key", v) }
     }
+
+    /** Version du traitement : la changer refait les traductions gardées. */
+    private const val VERSION = "t3"
+
+    /** Termes officiels en français (Fruit du démon, Grand Corsaire, Barbe Blanche…). */
+    var termsEnabled: Boolean
+        get() = Prefs.getBool("names_terms", true)
+        set(v) { Prefs.putBool("names_terms", v) }
 
     /** Protection activée (interrupteur général). */
     var enabled: Boolean
@@ -80,7 +94,100 @@ object Names {
         "One Piece", "Poneglyph", "Poneglyphs", "Road Poneglyph", "Rio Poneglyph", "Den Den Mushi", "Log Pose", "Eternal Pose", "Vivre Card",
         "Sea Prism Stone", "Kairoseki", "Pluton", "Poseidon", "Uranus", "Shichibukai", "Yonko", "Yonkou", "Tenryuubito", "Tenryubito",
         "Baroque Works", "Germa 66", "Vinsmoke", "Kozuki", "Donquixote", "Charlotte", "Minks", "Kuja Pirates", "Heart Pirates",
-        "Kid Pirates", "Beasts Pirates", "Tobiroppo", "Kozuki clan", "Mugiwara", "Mugiwara no Luffy"
+        "Kid Pirates", "Beasts Pirates", "Tobiroppo", "Kozuki clan", "Mugiwara", "Mugiwara no Luffy",
+        // Famille Vinsmoke, Baratie
+        "Vinsmoke Judge", "Vinsmoke Reiju", "Reiju", "Vinsmoke Ichiji", "Ichiji", "Vinsmoke Niji", "Niji", "Vinsmoke Yonji", "Yonji",
+        "Vinsmoke Sora", "Patty", "Carne", "Germa",
+        // East Blue, enfance de Luffy
+        "Gaimon", "Boodle", "Chouchou", "Mohji", "Richie", "Cabaji", "Gin", "Pearl", "Klahadore", "Ninjin", "Tamanegi", "Piiman",
+        "Sham", "Buchi", "Kuroobi", "Hachi", "Curly Dadan", "Dogra", "Magra", "Sterry", "Outlook III", "Porchemy", "Bluejam", "Higuma",
+        "Woop Slap", "Kuina", "Koshiro", "Portgas D. Rouge", "Rouge",
+        // Grand Line, première moitié
+        "Nefertari Cobra", "Cobra", "Igaram", "Chaka", "Pell", "Kohza", "Koza", "Toto", "Terracotta", "Miss Wednesday", "Miss Friday", "Mr. 9",
+        "Mr. 7", "Dorry", "Brogy", "Chess", "Kuromarimo", "Hiriluk", "Dr. Hiriluk", "Aisa", "Laki", "Kamakiri", "Mont Blanc Noland", "Noland",
+        "Mont Blanc Cricket", "Cricket", "Masira", "Shoujou", "Satori", "Shura", "Gedatsu", "Ohm", "Kalgara", "Calgara", "Bellamy", "Sarquiss",
+        "Kokoro", "Chimney", "Gonbe", "Zambai", "Kiwi", "Mozu", "Peepley Lulu", "Tilestone", "Franky Family", "Square Sisters", "Hogback",
+        "Victoria Cindry", "Cindry", "Oars", "Lola", "Shimotsuki Ryuma", "Ryuma", "Nico Olvia", "Olvia", "Professor Clover", "Clover",
+        "Jaguar D. Saul", "Saul", "Duval", "Disco", "Saint Roswald", "Saint Shalria", "Shalria", "Saint Mjosgard", "Mjosgard",
+        "Boa Sandersonia", "Sandersonia", "Boa Marigold", "Gloriosa", "Nyon", "Marguerite", "Salome", "Shiliew", "Domino", "Saldeath", "Sadi",
+        "Minotaurus", "Fisher Tiger", "Neptune", "Ryuboshi", "Manboshi", "Vander Decken", "Decken", "Keimi", "Madam Shyarly", "Shyarly",
+        "Wadatsumi", "Hammond", "Megalo",
+        // Barbe Blanche, Barbe Noire, le Roux, Roger, Rocks
+        "Jozu", "Atmos", "Squard", "Curiel", "Haruta", "Blamenco", "Rakuyo", "Namule", "Fossa", "Kingdew", "Edward Weevil", "Weevil",
+        "Doc Q", "Avalo Pizarro", "Pizarro", "San Juan Wolf", "Sanjuan Wolf", "Limejuice", "Building Snake", "Hongo", "Bonk Punch",
+        "Howling Gab", "Uta", "Shiki", "Douglas Bullet", "Wang Zhi", "Captain John", "Stussy", "Killer", "Jean Bart", "Shachi",
+        // Nouveau Monde : Punk Hazard, Dressrosa, Zou, Whole Cake
+        "Brownbeard", "Smiley", "Mocha", "Riku Dold III", "Leo", "Mansherry", "Gancho", "Sugar", "Trebol", "Diamante", "Pica", "Gladius",
+        "Machvise", "Senor Pink", "Señor Pink", "Dellinger", "Lao G", "Baby 5", "Buffalo", "Hajrudin", "Ideo", "Orlumbus", "Elizabello",
+        "Dagama", "Chinjao", "Don Chinjao", "Kelly Funk", "Bobby Funk", "Jora", "Violet", "Wanda", "Carrot", "Shishilian", "Bariete",
+        "Charlotte Perospero", "Perospero", "Charlotte Smoothie", "Charlotte Oven", "Charlotte Daifuku", "Daifuku", "Charlotte Brulee", "Brulee",
+        "Charlotte Galette", "Charlotte Chiffon", "Charlotte Lola", "Charlotte Praline", "Charlotte Amande", "Charlotte Mont-d'Or",
+        "Charlotte Opera", "Charlotte Flampe", "Tamago", "Bobbin", "Streusen", "Mother Carmel", "Capone", "Vito", "Gotti",
+        // Wano
+        "Kurozumi Orochi", "Orochi", "Kurozumi Kanjuro", "Kurozumi Higurashi", "Kurozumi Semimaru", "Who's-Who", "Black Maria", "Sasaki",
+        "Ulti", "Page One", "Holdem", "Hyogoro", "Kawamatsu", "Shinobu", "Tama", "Otama", "Toko", "Komurasaki", "Kozuki Toki", "Toki",
+        "Kozuki Sukiyaki", "Shimotsuki Kozaburo", "Shimotsuki Ushimaru", "Shimotsuki Yasuie", "Yasuie", "Zunesha", "Zunisha", "Kyoshiro",
+        "Onimaru", "Kawamatsu", "Okiku",
+        // Egghead, Elbaf, Gouvernement, Marine
+        "Lilith", "Shaka", "Pythagoras", "Edison", "Atlas", "Seraphim", "Pacifista", "S-Snake", "S-Hawk", "S-Bear", "S-Shark",
+        "Sentomaru", "Topman Warcury", "Warcury", "Marcus Mars", "Ethanbaron V. Nusjuro", "Nusjuro", "Shepherd Ju Peter", "Ju Peter",
+        "Garling", "Figarland Shamrock", "Gunko", "Killingham", "Sommers", "Rimoshifu", "Loki", "Harald", "Jarul", "Jorul", "Gerd", "Ida",
+        "Oimo", "Kashii", "Bogard", "Momonga", "Onigumo", "Doberman", "Yamakaji", "Comil", "Kujaku", "Prince Grus", "Grus", "Hibari",
+        "Tokikake", "Gion", "Zephyr", "Ain", "Binz", "Stainless", "Brannew", "T-Bone", "Isuka", "Dalmatian", "Lacroix", "Mozambia",
+        "Wanze", "Nero", "Hattori", "Hack", "Bunny Joe", "Ahiru", "Pandaman",
+        // Lieux et navires
+        "Gecko Islands", "Conomi Islands", "Organ Islands", "Cactus Island", "Whiskey Peak", "Sandy Island", "Banaro Island", "Pucci",
+        "St. Poplar", "San Faldo", "Tottoland", "Cacao Island", "Foodvalten", "Lodestar Island", "Pangaea Castle", "Red Port", "Wa no Kuni",
+        "Ebisu Town", "Okobore Town", "Bakura Town", "Amigasa Village", "Kuraigana Island", "Kenzan", "Gyoverly Hills", "Coral Hill",
+        "Prodence Kingdom", "Kano Country", "Germa Kingdom", "Sorbet Kingdom", "Ilusia Kingdom", "Future Island", "Labophase", "Warland",
+        "Treasure Tree Adam", "Yggdrasil", "Victoria Punk", "Queen Mama Chanter", "Perfume Yuda", "Ark Maxim", "Mini Merry", "Shark Submerge",
+        "Noah", "Sunny", "Davy Back Fight",
+        // Fruits du démon (forme courte comprise)
+        "Hito Hito no Mi, Model: Nika", "Gura Gura", "Yami Yami", "Pika Pika", "Hie Hie", "Magu Magu", "Ope Ope", "Ito Ito", "Goro Goro",
+        "Suna Suna", "Hana Hana", "Bara Bara", "Mochi Mochi", "Yomi Yomi", "Moku Moku", "Hobi Hobi", "Nikyu Nikyu", "Mero Mero", "Doku Doku",
+        "Horo Horo", "Kage Kage", "Toshi Toshi", "Soru Soru", "Bari Bari", "Ori Ori", "Gasu Gasu", "Numa Numa", "Yuki Yuki", "Mane Mane",
+        "Doru Doru", "Sube Sube", "Bomu Bomu", "Supa Supa", "Jiki Jiki", "Hiso Hiso", "Ishi Ishi", "Uta Uta", "Nagi Nagi", "Zushi Zushi",
+        "Tori Tori", "Inu Inu", "Ryu Ryu", "Hebi Hebi", "Neko Neko", "Zou Zou", "Model: Nika", "Model: Phoenix", "Model: Azure Dragon",
+        // Techniques
+        "Santoryu Ogi", "Santoryu Ougi", "Mutoryu", "Tatsumaki", "Rengoku Onigiri", "Ashura", "Ichidai Sanzen Daisen Sekai", "King of Hell",
+        "Enma Kitetsu", "Wado", "Collier Shoot", "Poitrine Shoot", "Mouton Shot", "Party Table Kick Course", "Hell Memories", "Sky Walk",
+        "Anti-Manner Kick Course", "Veau Shot", "Hiken no Ace", "Dai Enkai", "Entei", "Kamusari", "Kamuzari", "Haoshoku Haki",
+        "Ryusoken",
+        // Mots japonais courants dans les fics
+        "nakama", "Oyaji", "Ossan", "Jiji", "Kaizoku Ou", "Mugiwara no Ichimi", "Mugiwara-ya", "Mellorine"
+    ), terms = mapOf(
+        // Équipages et surnoms : leur nom officiel en français
+        "Straw Hat Pirates" to "Pirates du Chapeau de paille", "Straw Hat crew" to "équipage du Chapeau de paille",
+        "Straw Hat Crew" to "équipage du Chapeau de paille", "Straw Hat Grand Fleet" to "Grande Flotte du Chapeau de paille",
+        "Straw Hats" to "Chapeaux de paille", "Straw Hat Luffy" to "Luffy au Chapeau de paille", "Straw Hat" to "Chapeau de paille",
+        "Whitebeard Pirates" to "Pirates de Barbe Blanche", "Blackbeard Pirates" to "Pirates de Barbe Noire",
+        "Red Hair Pirates" to "Pirates du Roux", "Red-Haired Pirates" to "Pirates du Roux",
+        "Whitebeard" to "Barbe Blanche", "Blackbeard" to "Barbe Noire",
+        "Red-Haired Shanks" to "Shanks le Roux", "Red Hair Shanks" to "Shanks le Roux",
+        "Fire Fist Ace" to "Ace aux poings ardents", "Fire Fist" to "Poings ardents",
+        "Pirate Hunter Zoro" to "Zoro le chasseur de pirates", "Black Leg Sanji" to "Sanji la Jambe noire",
+        "Cat Burglar Nami" to "Nami la Chatte voleuse", "Hawk-Eye Mihawk" to "Mihawk Œil de faucon", "Hawkeye Mihawk" to "Mihawk Œil de faucon",
+        "Hawk-Eyes Mihawk" to "Mihawk Œil de faucon", "Surgeon of Death" to "Chirurgien de la mort",
+        // Titres et institutions
+        "King of the Pirates" to "Roi des pirates", "Pirate King" to "Roi des pirates",
+        "Seven Warlords of the Sea" to "sept Grands Corsaires", "Warlords of the Sea" to "Grands Corsaires", "Warlord of the Sea" to "Grand Corsaire",
+        "Four Emperors" to "quatre Empereurs",
+        "Fleet Admiral" to "Amiral en chef", "Vice Admiral" to "Vice-amiral", "Vice-Admiral" to "Vice-amiral", "Rear Admiral" to "Contre-amiral",
+        "World Government" to "Gouvernement mondial", "Celestial Dragons" to "Dragons célestes", "Celestial Dragon" to "Dragon céleste",
+        "World Nobles" to "Nobles mondiaux", "World Noble" to "Noble mondial", "Five Elders" to "Cinq Doyens",
+        "Revolutionary Army" to "Armée révolutionnaire", "Worst Generation" to "Pire Génération", "New World" to "Nouveau Monde",
+        // Pouvoirs et objets
+        "Devil Fruits" to "Fruits du démon", "Devil Fruit" to "Fruit du démon", "devil fruits" to "fruits du démon", "devil fruit" to "fruit du démon",
+        "Devil Fruit user" to "utilisateur de Fruit du démon", "Devil Fruit users" to "utilisateurs de Fruit du démon",
+        "Conqueror's Haki" to "Haki des rois", "Conqueror’s Haki" to "Haki des rois", "Armament Haki" to "Haki de l'armement",
+        "Observation Haki" to "Haki de l'observation", "Sea Prism Stone" to "granit marin", "Seastone" to "granit marin", "seastone" to "granit marin",
+        "Sea Kings" to "Rois des mers", "Sea King" to "Roi des mers", "Void Century" to "Siècle oublié", "Ancient Weapons" to "armes antiques",
+        "Ancient Weapon" to "arme antique", "Will of D." to "volonté du D.", "Fish-Men" to "Hommes-poissons", "Fishmen" to "Hommes-poissons",
+        "Fish-Man" to "Homme-poisson", "Fishman" to "Homme-poisson", "Mermaid" to "Sirène", "Mermaids" to "Sirènes"
+    ), patterns = listOf(
+        "Gomu Gomu no(?: [A-Z][A-Za-z'-]+)+",
+        "[A-Z][a-z]+ [A-Z][a-z]+ no Mi(?:,? Model: [A-Z][A-Za-z'-]*(?: [A-Z][A-Za-z'-]*)*)?",
+        "(?:Santoryu|Nitoryu|Ittoryu|Kyutoryu|Mutoryu)(?: Ogi| Ougi)?: (?:[A-Z][A-Za-z'-]+)(?: [A-Z][A-Za-z'-]+)*"
     ))
 
     val NARUTO = Fandom("naruto", "Naruto", listOf(
@@ -130,7 +237,23 @@ object Names {
         "Juken", "Jyuken", "Hakke Rokujuyon Sho", "Hachimon", "Hachimon Tonko", "Kagemane no Jutsu", "Shintenshin no Jutsu", "Baika no Jutsu",
         "Sabaku Kyu", "Sabaku Soso", "Kyubi Chakra Mode", "Kurama Mode", "Baryon Mode", "Sage Mode", "Senin Mode", "Sennin Mode", "Six Paths Sage Mode",
         "Chakra no Mesu", "Byakugo", "Byakugo no In", "Kubikiribocho", "Samehada", "Totsuka", "Yata Mirror", "Gunbai", "Hiraishin kunai",
-        "Kirin", "Sozo Saisei", "Rashomon", "Chunin Exams", "Chuunin Exams"
+        "Kirin", "Sozo Saisei", "Rashomon",
+        "Ero-sennin", "Baa-chan", "Tsunade-baachan", "Hokage-sama", "Sandaime Hokage", "Yondaime Hokage", "Ichibi", "Nibi", "Sanbi",
+        "Yonbi", "Gobi", "Rokubi", "Nanabi", "Hachibi", "Kyuubi Chakra", "Root", "Ne", "Anbu Ne", "Team 7", "Team Seven", "Team Kakashi",
+        "Team Minato", "Team Gai", "Team Guy", "Team 8", "Team 10", "Hebi", "Taka", "Rikudo Sennin", "Rikudou Sennin", "Ninshu", "Ninshuu"
+    ), terms = mapOf(
+        "Hidden Leaf Village" to "village caché de Konoha", "Village Hidden in the Leaves" to "village caché de Konoha",
+        "Hidden Leaf" to "Konoha", "Leaf Village" to "village de Konoha", "Hidden Sand Village" to "village caché de Suna",
+        "Hidden Mist Village" to "village caché de Kiri", "Hidden Cloud Village" to "village caché de Kumo",
+        "Hidden Stone Village" to "village caché d'Iwa", "Hidden Rain Village" to "village caché d'Ame", "Hidden Sound Village" to "village caché d'Oto",
+        "Nine-Tailed Fox" to "Renard à neuf queues", "Nine-Tails" to "Kyûbi", "Nine Tails" to "Kyûbi",
+        "Tailed Beasts" to "démons à queues", "Tailed Beast" to "démon à queue", "Will of Fire" to "Volonté du Feu",
+        "Sage of the Six Paths" to "Ermite Rikudô", "Sage of Six Paths" to "Ermite Rikudô", "Sage Mode" to "Mode Ermite",
+        "Shadow Clone Jutsu" to "Multiclonage", "Copy Ninja" to "Ninja copieur", "Pervy Sage" to "Ermite pas net",
+        "Curse Mark" to "sceau maudit", "Cursed Seal" to "sceau maudit", "Eight Gates" to "huit Portes",
+        "Chunin Exams" to "examens chûnin", "Chuunin Exams" to "examens chûnin", "Chunin Exam" to "examen chûnin", "Chuunin Exam" to "examen chûnin"
+    ), patterns = listOf(
+        "(?:[A-Z][a-z']+:? )+no Jutsu"
     ))
 
     val FANDOMS = listOf(ONE_PIECE, NARUTO)
@@ -167,7 +290,7 @@ object Names {
     // ---------- Protection ----------
 
     private val SUFFIX = "(?:-(?:san|sama|kun|chan|sensei|senpai|sempai|dono|tan|chi|nii|nee|nii-san|nee-san|niisan|neesan|nii-chan|nee-chan|" +
-        "aniki|nee-sama|nii-sama|hime|shishou|shisho|baa-chan|jiji|jii-san|taichou|taicho|senchou|sencho))?"
+        "aniki|nee-sama|nii-sama|hime|shishou|shisho|baa-chan|jiji|jii-san|taichou|taicho|senchou|sencho|ya|swan|chwan|bro|aniki|kouhai|hakase))?"
 
     /** Liste active, pour savoir si les traductions déjà faites sont encore valables. */
     fun active(): List<String> {
@@ -178,48 +301,81 @@ object Names {
         return all.toList()
     }
 
+    /** Termes remplacés par leur équivalent français (vide si l'option est coupée). */
+    fun activeTerms(): Map<String, String> {
+        if (!enabled || !termsEnabled) return emptyMap()
+        val m = LinkedHashMap<String, String>()
+        FANDOMS.filter { it.enabled }.forEach { m.putAll(it.terms) }
+        return m
+    }
+
+    private fun activePatterns(): List<String> = if (!enabled) emptyList() else FANDOMS.filter { it.enabled }.flatMap { it.patterns }
+
     /** Signature de la liste active : change dès qu'un nom ou un fandom est ajouté ou retiré. */
     fun signature(): String {
         val v = Prefs.version.value
         sigCache.let { if (it.first == v) return it.second }
-        val sig = active().let { if (it.isEmpty()) "0" else it.hashCode().toString(36) + "." + it.size }
+        val a = active(); val t = activeTerms(); val pt = activePatterns()
+        val sig = VERSION + "." + if (a.isEmpty() && t.isEmpty()) "0" else (a.hashCode() * 31 + t.hashCode() * 7 + pt.hashCode()).toString(36) + "." + (a.size + t.size)
         sigCache = v to sig
         return sig
     }
 
     @Volatile private var sigCache: Pair<Int, String> = -1 to ""
 
-    @Volatile private var compiled: Pair<String, Regex?> = "" to null
+    private class Compiled(val rx: Regex?, val terms: Map<String, String>, val ci: Regex?, val canon: Map<String, String>)
 
-    private fun regex(): Regex? {
+    @Volatile private var compiled: Pair<String, Compiled> = "" to Compiled(null, emptyMap(), null, emptyMap())
+
+    private fun withCap(n: String): List<String> {
+        val c = n.first()
+        return if (c.isLowerCase()) listOf(n, c.uppercaseChar() + n.substring(1)) else listOf(n)
+    }
+
+    private fun compiled(): Compiled {
         val sig = signature()
         compiled.let { if (it.first == sig) return it.second }
-        val list = active()
-        val rx = if (list.isEmpty()) null else {
-            val alts = list.flatMap { n ->
-                val c = n.first()
-                if (c.isLowerCase()) listOf(n, c.uppercaseChar() + n.substring(1)) else listOf(n)
-            }.distinct().sortedByDescending { it.length }.joinToString("|") { Regex.escape(it) }
-            Regex("(?<![\\p{L}\\p{N}])(?:$alts)$SUFFIX(?![\\p{L}\\p{N}])")
-        }
-        compiled = sig to rx
-        return rx
+        val terms = activeTerms()
+        val literals = (active() + terms.keys).flatMap { withCap(it) }.distinct().sortedByDescending { it.length }
+        val pats = activePatterns()
+        val alts = (literals.map { Regex.escape(it) } + pats.map { "(?:$it)" })
+        val rx = if (alts.isEmpty()) null else Regex("(?<![\\p{L}\\p{N}])(" + alts.joinToString("|") + ")($SUFFIX)(?![\\p{L}\\p{N}])")
+        // Pour remettre les majuscules d'une phrase criée (« LUFFY ! » → « Luffy ! » avant traduction).
+        val canon = HashMap<String, String>()
+        literals.forEach { n -> val k = n.lowercase(); val old = canon[k]; if (old == null || (n.first().isUpperCase() && !old.first().isUpperCase())) canon[k] = n }
+        val ci = if (literals.isEmpty()) null else Regex("(?<![\\p{L}\\p{N}])(?:" + literals.joinToString("|") { Regex.escape(it) } + ")(?![\\p{L}\\p{N}])", RegexOption.IGNORE_CASE)
+        val c = Compiled(rx, terms, ci, canon)
+        compiled = sig to c
+        return c
+    }
+
+    /** Remet les majuscules des noms connus dans un texte passé en minuscules. */
+    fun recase(s: String): String {
+        val c = compiled()
+        val ci = c.ci ?: return s
+        return ci.replace(s) { m -> c.canon[m.value.lowercase()] ?: m.value }
     }
 
     /** Texte prêt pour le traducteur : les noms sont remplacés par des numéros. */
-    class Protected(val text: String, val names: List<String>, private val prefix: Char) {
-        val isEmpty get() = names.isEmpty()
+    class Protected(val text: String, private val out: List<String>, private val prefix: Char) {
+        val isEmpty get() = out.isEmpty()
 
         /** Remet les noms ; null si le traducteur a perdu un numéro (on traduit alors le texte tel quel). */
         fun restore(translated: String): String? {
-            if (names.isEmpty()) return translated
-            val seen = BooleanArray(names.size)
-            val out = tokenRx(prefix).replace(translated) { m ->
+            if (out.isEmpty()) return translated
+            val seen = BooleanArray(out.size)
+            val res = tokenRx(prefix).replace(translated) { m ->
                 val i = m.groupValues[1].toInt()
-                if (i < names.size) { seen[i] = true; names[i] } else m.value
+                if (i < out.size) { seen[i] = true; out[i] } else m.value
             }
-            return if (seen.all { it }) out else null
+            return if (seen.all { it }) res else null
         }
+
+        /** Le texte sans les numéros : reste-t-il quelque chose à traduire ? */
+        fun bare(): String = tokenRx(prefix).replace(text, " ")
+
+        /** Remet les noms sans rien traduire (paragraphe fait seulement de noms). */
+        fun fill(): String = restore(text) ?: text
     }
 
     private fun tokenRx(p: Char) = Regex("(?<!\\d)$p[ \\u00A0\\u202F.,]?1(\\d\\d)(?!\\d)")
@@ -227,17 +383,24 @@ object Names {
     private fun token(p: Char, i: Int) = "$p" + "1" + i.toString().padStart(2, '0')
 
     fun protect(s: String): Protected {
-        val rx = regex() ?: return Protected(s, emptyList(), '9')
+        val c = compiled()
+        val rx = c.rx ?: return Protected(s, emptyList(), '9')
         if (!rx.containsMatchIn(s)) return Protected(s, emptyList(), '9')
         // Un préfixe de numéro qui n'apparaît pas déjà dans le texte.
         val p = "98765432".firstOrNull { !tokenRx(it).containsMatchIn(s) } ?: return Protected(s, emptyList(), '9')
-        val names = ArrayList<String>()
+        val keys = ArrayList<String>()
+        val out = ArrayList<String>()
         val text = rx.replace(s) { m ->
-            if (names.size >= 99 && m.value !in names) return@replace m.value
-            var i = names.indexOf(m.value)
-            if (i < 0) { names += m.value; i = names.size - 1 }
+            if (keys.size >= 99 && m.value !in keys) return@replace m.value
+            var i = keys.indexOf(m.value)
+            if (i < 0) {
+                val base = m.groupValues[1]; val suffix = m.groupValues[2]
+                val fr = c.terms[base] ?: c.terms[base.replaceFirstChar { it.lowercaseChar() }]
+                    ?.let { t -> if (base.first().isUpperCase()) t.replaceFirstChar { it.uppercaseChar() } else t }
+                keys += m.value; out += (fr ?: base) + suffix; i = keys.size - 1
+            }
             token(p, i)
         }
-        return Protected(text, names, p)
+        return Protected(text, out, p)
     }
 }

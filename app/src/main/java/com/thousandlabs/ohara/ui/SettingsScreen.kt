@@ -570,12 +570,15 @@ private fun NamesSection() {
     var name by remember { mutableStateOf("") }
     var showList by remember { mutableStateOf<String?>(null) }
     NoteCard("Pendant la traduction, ces noms restent tels quels : « Drum Island » ne devient pas « l'île des tambours », « Usopp » reste « Usopp ». " +
-        "Les suffixes collés au nom (-san, -sensei, -chan…) restent avec lui. Les pages déjà ouvertes se retraduisent quand vous les rechargez.", icon = Icons.Outlined.Translate)
+        "Les suffixes collés au nom (-san, -sensei, -chan, -ya, -swan…) restent avec lui. Les termes propres à l'univers (Fruit du démon, Grand Corsaire, Barbe Blanche) prennent leur nom officiel en français. Les pages déjà ouvertes se retraduisent quand vous les rechargez.", icon = Icons.Outlined.Translate)
     SwitchRow("Protéger les noms", "Personnages, îles, villages, techniques et titres", Names.enabled) { Names.enabled = it; BrowserHolder.retranslateOpenTab() }
     if (Names.enabled) {
         SectionTitle("Listes intégrées")
+        SwitchRow("Termes officiels en français", "« Devil Fruit » → « Fruit du démon », « Whitebeard » → « Barbe Blanche », « Hidden Leaf » → « Konoha »…", Names.termsEnabled) {
+            Names.termsEnabled = it; BrowserHolder.retranslateOpenTab()
+        }
         Names.FANDOMS.forEach { f ->
-            SwitchRow(f.label, "${Fmt.number(f.names.size.toLong())} noms · touchez « Voir » pour la liste", f.enabled) { f.enabled = it; BrowserHolder.retranslateOpenTab() }
+            SwitchRow(f.label, "${Fmt.number(f.names.distinct().size.toLong())} noms, ${Fmt.number(f.terms.size.toLong())} termes en français · touchez « Voir » pour la liste", f.enabled) { f.enabled = it; BrowserHolder.retranslateOpenTab() }
             TextButton(onClick = { showList = f.key }, modifier = Modifier.padding(horizontal = 8.dp)) { Text("Voir la liste ${f.label}") }
         }
         SectionTitle("Vos noms")
@@ -603,7 +606,18 @@ private fun NamesSection() {
             title = { Text("Liste ${f.label}") },
             text = {
                 Column(Modifier.verticalScroll(rememberScrollState())) {
+                    Text("Gardés tels quels", style = MaterialTheme.typography.titleSmall)
                     Text(f.names.distinct().sortedBy { it.lowercase() }.joinToString(" · "), style = MaterialTheme.typography.bodySmall)
+                    if (f.terms.isNotEmpty()) {
+                        Spacer(Modifier.height(12.dp))
+                        Text("Mis en français", style = MaterialTheme.typography.titleSmall)
+                        Text(f.terms.entries.sortedBy { it.key.lowercase() }.joinToString("\n") { "${it.key} → ${it.value}" }, style = MaterialTheme.typography.bodySmall)
+                    }
+                    if (f.patterns.isNotEmpty()) {
+                        Spacer(Modifier.height(12.dp))
+                        Text("Reconnus aussi par leur forme : " + if (f.key == "onepiece") "« … no Mi », « Gomu Gomu no … », « Santoryu: … »." else "« … no Jutsu ».",
+                            style = MaterialTheme.typography.bodySmall)
+                    }
                 }
             },
             confirmButton = { TextButton(onClick = { showList = null }) { Text("Fermer") } }

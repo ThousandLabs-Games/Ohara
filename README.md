@@ -16,8 +16,8 @@ Ohara réunit au même endroit la recherche, la lecture, le téléchargement et 
 - Favoris rangés en dossiers ; appui long sur un lien pour l'ouvrir en arrière-plan ou en privé, ajouter ou télécharger la fic, copier, partager.
 - Lecture : barres cachées en descendant, chapitre suivant en continuant à faire défiler tout en bas (une seconde), précédent tout en haut, mode lecture (thème, police, taille, interligne, marges).
 - Bloqueur de publicités et de pisteurs (EasyList, EasyPrivacy, liste de Peter Lowe, Fanboy), anti-pistage proche de Brave.
-- Traduction en français en un bouton, sur le téléphone (rien n'est envoyé), pour toutes les pages tant qu'elle est activée.
-- Noms à ne pas traduire : personnages, îles, villages et techniques de One Piece et de Naruto gardés tels quels pendant la traduction (« Drum Island », « Usopp »), avec vos propres noms en plus (appui long sur un nom › « Ne pas traduire »).
+- Traduction en français en un bouton, sur le téléphone (rien n'est envoyé), pour toutes les pages tant qu'elle est activée ; phrases traduites en entier (même avec de l'italique), phrases criées comprises, typographie française.
+- Noms à ne pas traduire : personnages, îles, villages et techniques de One Piece et de Naruto gardés tels quels pendant la traduction (« Drum Island », « Usopp »), avec vos propres noms en plus (appui long sur un nom › « Ne pas traduire ») ; termes de l'univers mis à leur nom officiel français (Fruit du démon, Grand Corsaire, Barbe Blanche, village caché de Konoha).
 - Appui long sur une phrase › « Masquer » : elle disparaît tout de suite et dans les chapitres suivants. Promos et notes d'auteur masquées d'office.
 - « Masquer un élément » d'un site (bannières, encarts), comme sur Brave.
 - Réglages par site : chaque fonction (glissement entre chapitres, barres cachées, mode lecture, masquage, menu des liens, traduction) peut être coupée sur un site seulement.

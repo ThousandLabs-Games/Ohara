@@ -81,16 +81,95 @@ object Translate {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, String>?) = size > 6000
     }
 
+    // ---------- Découpage ----------
+
+    /** Abréviations suivies d'un point qui ne terminent pas une phrase (« Mr. 3 », « Dr. Kureha », « Mt. Colubo »). */
+    private val ABBR = setOf("mr", "mrs", "ms", "dr", "st", "mt", "lt", "sgt", "capt", "col", "gen", "jr", "sr", "vs", "prof", "no", "vol", "ch", "fig", "approx")
+
+    private val END_RX = Regex("[.!?…]+[\"'”’»)\\]*_~]*\\s+")
+
+    /** Coupe un paragraphe en phrases, sans couper « Mr. 3 », « Monkey D. Luffy » ni « … puis il partit ». */
+    internal fun sentences(s: String): List<String> {
+        val out = ArrayList<String>()
+        var start = 0
+        for (m in END_RX.findAll(s)) {
+            val end = m.range.last + 1
+            if (end >= s.length) break
+            if (s[end].isLowerCase()) continue
+            if (s[m.range.first] == '.' && m.value.trimEnd().count { it == '.' } == 1 && m.value.trimEnd().length == 1) {
+                val w = Regex("[\\p{L}.]+$").find(s.substring(start, m.range.first))?.value ?: ""
+                if (w.length == 1 && w[0].isUpperCase()) continue              // initiale : « D. Luffy »
+                if (w.contains('.') || w.lowercase() in ABBR) continue         // « e.g. », « Mr. »
+            }
+            s.substring(start, end).trim().takeIf { it.isNotEmpty() }?.let { out += it }
+            start = end
+        }
+        if (start < s.length) s.substring(start).trim().takeIf { it.isNotEmpty() }?.let { out += it }
+        return out
+    }
+
+    /** Phrase criée, écrite en majuscules : le traducteur la comprend mal telle quelle. */
+    internal fun isShout(s: String): Boolean {
+        val letters = s.filter { it.isLetter() }
+        if (letters.length < 4) return false
+        return letters.count { it.isUpperCase() } >= letters.length * 0.85 && Regex("\\p{Lu}{3,}").containsMatchIn(s)
+    }
+
+    /** « WHERE IS LUFFY?! » → « Where is Luffy?! » (les noms connus gardent leur majuscule). */
+    private fun unshout(s: String): String {
+        var t = s.lowercase()
+        t = Regex("(^|[.!?…]\\s+|[\"“«]\\s*)(\\p{Ll})").replace(t) { it.groupValues[1] + it.groupValues[2].uppercase() }
+        t = Regex("(?<![\\p{L}'’])i(?=[\\s'’,.!?…]|$)").replace(t, "I")
+        return Names.recase(t)
+    }
+
+    private class Piece(val text: String, val shout: Boolean)
+
     /**
-     * Traduction d'un texte, avec les noms protégés (personnages, îles, techniques…) gardés tels quels.
-     * Si le traducteur abîme un repère, le texte est traduit sans protection plutôt que de rester en anglais.
+     * Le paragraphe en morceaux d'environ 300 caractères, coupés entre deux phrases :
+     * un texte court se traduit mieux (moins de passages oubliés ou mélangés), et un numéro perdu ne gâche qu'un morceau.
+     * Les phrases criées sont traduites à part puis remises en majuscules.
      */
+    private fun pieces(s: String): List<Piece> {
+        val out = ArrayList<Piece>()
+        val buf = StringBuilder()
+        fun flush() { if (buf.isNotEmpty()) { out += Piece(buf.toString(), false); buf.clear() } }
+        for (x in sentences(s)) {
+            if (isShout(x)) { flush(); out += Piece(unshout(x), true); continue }
+            if (buf.isNotEmpty() && buf.length + x.length + 1 > 300) flush()
+            if (buf.isNotEmpty()) buf.append(' ')
+            buf.append(x)
+        }
+        flush()
+        return out
+    }
+
+    // ---------- Traduction ----------
+
+    /**
+     * Traduction d'un morceau, avec les noms protégés (personnages, îles, techniques…) gardés tels quels
+     * et les termes officiels mis en français. Si le traducteur abîme un repère, ce morceau seulement est traduit sans protection.
+     */
+    private suspend fun one(src: String): String {
+        val p = Names.protect(src)
+        if (p.isEmpty) return client.translate(src).await()
+        // Morceau fait seulement de noms (« Usopp ! ») : rien à traduire.
+        if (!Regex("\\p{L}{2}").containsMatchIn(p.bare())) return p.fill()
+        return p.restore(client.translate(p.text).await()) ?: client.translate(src).await()
+    }
+
     private suspend fun raw(s: String): String {
-        val p = Names.protect(s)
-        if (p.isEmpty) return client.translate(s).await()
-        // Paragraphe fait seulement de noms (« Usopp ! ») : rien à traduire.
-        if (!Regex("\\p{L}{2}").containsMatchIn(p.text)) return s
-        return p.restore(client.translate(p.text).await()) ?: client.translate(s).await()
+        val out = StringBuilder()
+        for (pc in pieces(s)) {
+            var r = one(pc.text).trim()
+            if (pc.shout) r = r.uppercase(java.util.Locale.FRENCH)
+            // Le traducteur met parfois une minuscule en tête (terme remplacé, phrase commençant par un nom…).
+            val a = pc.text.firstOrNull { it.isLetter() }; val i = r.indexOfFirst { it.isLetter() }
+            if (a != null && a.isUpperCase() && i >= 0 && r[i].isLowerCase()) r = r.substring(0, i) + r[i].uppercaseChar() + r.substring(i + 1)
+            if (out.isNotEmpty()) out.append(' ')
+            out.append(r)
+        }
+        return Typo.french(out.toString())
     }
 
     /** Traduit un texte court (un paragraphe) ; les textes déjà vus sont rendus aussitôt. */
