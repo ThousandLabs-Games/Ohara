@@ -79,14 +79,6 @@ object Nav {
     /** Ouvre une fic de la bibliothèque dans le navigateur, là où vous vous êtes arrêté (ou au chapitre demandé). */
     fun openFic(ficId: String, chapter: Int? = null) {
         val f = com.thousandlabs.ohara.data.Library.get(ficId) ?: return
-        if (f.site == com.thousandlabs.ohara.data.Site.LOCAL) {
-            // fic importée : pas de site, on lit directement les chapitres gardés
-            val idx = (chapter ?: f.progressChapter).coerceIn(0, maxOf(0, f.totalChapters - 1))
-            if (chapter == null) Recap.maybeShow(f)
-            com.thousandlabs.ohara.data.Library.update(ficId) { it.copy(lastOpened = System.currentTimeMillis(), newChapters = 0, completedAlert = false) }
-            BrowserHolder.openOffline(ficId, idx)
-            return
-        }
         val src = com.thousandlabs.ohara.sources.Sources.of(f.site)
         val url = when {
             chapter != null -> f.chapters.getOrNull(chapter)?.url ?: src.chapterUrl(f, chapter)

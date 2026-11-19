@@ -35,6 +35,12 @@ object PageTools {
 
     /** Adresses des chapitres voisins quand le site les donne par l'adresse (FanFiction.net). */
     fun neighbours(url: String, info: LinkInfo): Pair<String?, String?> {
+        if (info.site == Site.LOCAL && info.chapterIndex != null) {
+            val i = info.chapterIndex
+            val total = Library.get(info.ficId)?.totalChapters ?: 0
+            fun u(k: Int) = "https://${com.thousandlabs.ohara.sources.LocalSource.HOST}/${info.ficId}/$k"
+            return (if (i > 0) u(i - 1) else null) to (if (i + 1 < total) u(i + 1) else null)
+        }
         if (info.site != Site.FFN || info.chapterIndex == null) return null to null
         val n = info.chapterIndex + 1
         val total = Library.get(info.ficId)?.totalChapters ?: 0

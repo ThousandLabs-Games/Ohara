@@ -397,8 +397,27 @@ object BrowserHolder {
             "h1{font-size:19px;margin:6px 0 2px} h2{font-size:16px;font-weight:500;color:#666;margin:0 0 16px}" +
             "p{margin:0 0 .9em} nav{display:flex;justify-content:space-between;align-items:center;margin:18px 0;font-size:15px}" +
             "nav a{text-decoration:none;color:#1a5fb4;padding:8px 4px} nav .off{color:#aaa;padding:8px 4px} img{max-width:100%}" +
-            "</style></head><body><div class=\"bandeau\">Chapitre gardé sur le téléphone · lisible sans connexion</div>" +
+            "</style></head><body><div class=\"bandeau\">" + (if (f.site == Site.LOCAL) localMeta(f) else "Chapitre gardé sur le téléphone · lisible sans connexion") + "</div>" +
             "<h1>${esc(f.title)}</h1><h2>${esc(title)}</h2>$nav<div id=\"storytext\" class=\"storytext\">$raw</div>$nav</body></html>"
+    }
+
+    /** En-tête d'une fic importée, présenté comme sur FanFiction.net. */
+    private fun localMeta(f: com.thousandlabs.ohara.data.Fic): String {
+        val d = java.text.SimpleDateFormat("MMM d, yyyy", java.util.Locale.ENGLISH)
+        val parts = listOfNotNull(
+            f.fandoms.joinToString(" + ").takeIf { it.isNotBlank() }?.let { if (f.crossover) "$it Crossover" else it },
+            f.author.takeIf { it.isNotBlank() }?.let { "By: $it" },
+            f.rating.takeIf { it.isNotBlank() }?.let { "Rated: Fiction $it" },
+            f.language.takeIf { it.isNotBlank() },
+            f.genres.joinToString("/").takeIf { it.isNotBlank() },
+            f.characters.joinToString(", ").takeIf { it.isNotBlank() },
+            "Chapters: ${f.totalChapters}",
+            f.words.takeIf { it > 0 }?.let { "Words: " + java.text.NumberFormat.getIntegerInstance(java.util.Locale.ENGLISH).format(it) },
+            f.updated.takeIf { it > 0 && it != f.published }?.let { "Updated: " + d.format(java.util.Date(it)) },
+            f.published.takeIf { it > 0 }?.let { "Published: " + d.format(java.util.Date(it)) },
+            if (f.status == com.thousandlabs.ohara.data.FicStatus.COMPLETE) "Status: Complete" else null
+        )
+        return esc(parts.joinToString(" - "))
     }
 
     private var pendingOffline: Triple<Long, String, String>? = null
@@ -406,6 +425,8 @@ object BrowserHolder {
     fun openOffline(ficId: String, idx: Int) {
         restore()
         val f = Library.get(ficId) ?: return
+        // fic importée : ouverte comme une page en ligne, avec toutes les fonctions du navigateur
+        if (f.site == Site.LOCAL) { Nav.openFic(ficId, idx); return }
         val html = offlineHtml(ficId, idx) ?: run { Toast.show("Ce chapitre n'est pas sur le téléphone."); return }
         Nav.home(Nav.TAB_BROWSER)
         val t = if (!tab.isStart) newTab() else tab
@@ -588,6 +609,7 @@ hide:function(s){try{document.querySelectorAll(s).forEach(function(x){x.style.se
                 val uri = request.url
                 if (uri.host == OFFLINE_HOST) {
                     val parts = uri.pathSegments
+                    if (parts.firstOrNull()?.startsWith("loc:") == true) return false
                     val id = parts.getOrNull(0); val i = parts.getOrNull(1)?.toIntOrNull()
                     if (id != null && i != null) offlineHtml(id, i)?.let { html ->
                         val f = Library.get(id) ?: return true
@@ -614,6 +636,12 @@ hide:function(s){try{document.querySelectorAll(s).forEach(function(x){x.style.se
             }
 
             override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? {
+                // fic importée : ses chapitres sont servis comme une vraie page (rechargement, retour, mode lecture, glissement…)
+                if (request.url.host == OFFLINE_HOST && request.url.pathSegments.firstOrNull()?.startsWith("loc:") == true) {
+                    val p = request.url.pathSegments
+                    val html = p.getOrNull(1)?.toIntOrNull()?.let { offlineHtml(p[0], it) } ?: "<!DOCTYPE html><html><body><p>Chapitre introuvable.</p></body></html>"
+                    return WebResourceResponse("text/html", "utf-8", java.io.ByteArrayInputStream(html.toByteArray(Charsets.UTF_8)))
+                }
                 if (request.isForMainFrame) return null
                 return if (AdBlocker.shouldBlock(request.url.toString(), t.pageUrl)) AdBlocker.emptyResponse() else null
             }
