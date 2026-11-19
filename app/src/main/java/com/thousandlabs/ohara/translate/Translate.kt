@@ -153,7 +153,7 @@ object Translate {
         set(v) { Prefs.putBool("tr_online", v); namesChanged() }
 
     /** Les traductions gardées dépendent des noms protégés et du moteur qui les a faites. */
-    fun signature(): String = Names.signature() + if (online) "|g1" else "|m1"
+    fun signature(): String = Names.signature() + if (online) "|g2" else "|m1"
 
     /** Prépare la traduction : rien à faire en ligne, le modèle du téléphone sinon. */
     suspend fun prepare(onProgress: (String) -> Unit = {}) { if (!online) ensureModel(onProgress) }
@@ -185,7 +185,8 @@ object Translate {
      * et les termes officiels mis en français. Si le traducteur abîme un repère, ce morceau seulement est retraduit sans protection.
      */
     private suspend fun translatePieces(src: List<String>): List<String> {
-        val prot = src.map { Names.protect(it) }
+        val word = online && Online.available
+        val prot = src.map { Names.protect(it, word) }
         val res = arrayOfNulls<String>(src.size)
         val send = ArrayList<Int>()
         prot.forEachIndexed { i, p ->

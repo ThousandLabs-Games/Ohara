@@ -357,22 +357,22 @@ object Names {
     }
 
     /** Texte prêt pour le traducteur : les noms sont remplacés par des numéros. */
-    class Protected(val text: String, private val out: List<String>, private val prefix: Char) {
+    class Protected(val text: String, private val out: List<String>, private val prefix: Char, private val word: Boolean = false) {
         val isEmpty get() = out.isEmpty()
 
         /** Remet les noms ; null si le traducteur a perdu un numéro (on traduit alors le texte tel quel). */
         fun restore(translated: String): String? {
             if (out.isEmpty()) return translated
             val seen = BooleanArray(out.size)
-            val res = tokenRx(prefix).replace(translated) { m ->
-                val i = m.groupValues[1].toInt()
+            val res = (if (word) WORD_RX else tokenRx(prefix)).replace(translated) { m ->
+                val i = if (word) wordIndex(m.groupValues[1]) else m.groupValues[1].toInt()
                 if (i < out.size) { seen[i] = true; out[i] } else m.value
             }
             return if (seen.all { it }) res else null
         }
 
         /** Le texte sans les numéros : reste-t-il quelque chose à traduire ? */
-        fun bare(): String = tokenRx(prefix).replace(text, " ")
+        fun bare(): String = (if (word) WORD_RX else tokenRx(prefix)).replace(text, " ")
 
         /** Remet les noms sans rien traduire (paragraphe fait seulement de noms). */
         fun fill(): String = restore(text) ?: text
@@ -382,16 +382,26 @@ object Names {
 
     private fun token(p: Char, i: Int) = "$p" + "1" + i.toString().padStart(2, '0')
 
-    fun protect(s: String): Protected {
+    /*
+     * Repères en forme de nom inventé (« Zqab », « Zqac »…) pour la traduction en ligne : un numéro y était pris pour
+     * une quantité (« Luffy sourit » devenait « 9100 personnes sourient », puis « Luffy personnes »).
+     * Un nom inconnu, lui, est recopié tel quel, et le reste de la phrase s'accorde comme avec un prénom.
+     */
+    private val WORD_RX = Regex("(?<![\\p{L}\\d])[Zz][Qq]([a-zA-Z]{2})(?![\\p{L}\\d])")
+    private fun wordToken(i: Int) = "Zq" + ('a' + i / 26) + ('a' + i % 26)
+    private fun wordIndex(s: String): Int { val l = s.lowercase(); return (l[0] - 'a') * 26 + (l[1] - 'a') }
+
+    fun protect(s: String, word: Boolean = false): Protected {
         val c = compiled()
         val rx = c.rx ?: return Protected(s, emptyList(), '9')
         if (!rx.containsMatchIn(s)) return Protected(s, emptyList(), '9')
+        if (word && WORD_RX.containsMatchIn(s)) return protect(s, false)
         // Un préfixe de numéro qui n'apparaît pas déjà dans le texte.
-        val p = "98765432".firstOrNull { !tokenRx(it).containsMatchIn(s) } ?: return Protected(s, emptyList(), '9')
+        val p = if (word) 'z' else "98765432".firstOrNull { !tokenRx(it).containsMatchIn(s) } ?: return Protected(s, emptyList(), '9')
         val keys = ArrayList<String>()
         val out = ArrayList<String>()
         val text = rx.replace(s) { m ->
-            if (keys.size >= 99 && m.value !in keys) return@replace m.value
+            if (keys.size >= (if (word) 600 else 99) && m.value !in keys) return@replace m.value
             var i = keys.indexOf(m.value)
             if (i < 0) {
                 val base = m.groupValues[1]; val suffix = m.groupValues[2]
@@ -399,8 +409,8 @@ object Names {
                     ?.let { t -> if (base.first().isUpperCase()) t.replaceFirstChar { it.uppercaseChar() } else t }
                 keys += m.value; out += (fr ?: base) + suffix; i = keys.size - 1
             }
-            token(p, i)
+            if (word) wordToken(i) else token(p, i)
         }
-        return Protected(text, out, p)
+        return Protected(text, out, p, word)
     }
 }

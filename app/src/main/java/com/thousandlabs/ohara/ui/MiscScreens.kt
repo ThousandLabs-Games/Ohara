@@ -255,6 +255,11 @@ fun GuideScreen() {
 // ---------- Nouveautés de l'appli ----------
 
 private val VERSIONS = listOf(
+    "Traduction corrigée — 19 novembre 2026" to listOf(
+        "Les noms de personnages ne sont plus suivis d'un mot parasite (« Luffy personne ») : la traduction en ligne prenait le repère du nom pour un nombre.",
+        "La page ne saute plus pendant la traduction : quand un paragraphe au-dessus de l'écran change de longueur, la lecture reste au même endroit.",
+        "Les chapitres déjà traduits en ligne sont refaits avec la correction."
+    ),
     "Traduction en ligne et fics importées — 19 novembre 2026" to listOf(
         "Nouvelle traduction en ligne, activée d'office : chaque paragraphe est traduit entier, avec son contexte. Le français est bien plus naturel, les expressions et le ton des dialogues sont respectés.",
         "Bien plus rapide : les paragraphes partent par paquets, plusieurs à la fois. Le haut de la page s'affiche d'abord, le reste suit en quelques secondes.",
