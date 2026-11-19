@@ -8,7 +8,9 @@ enum class Site(val code: String, val label: String, val short: String) {
     FFN("ffn", "FanFiction.net", "FFN"),
     SB("sb", "SpaceBattles", "SB"),
     WN("wn", "WebNovel", "WN"),
-    OTHER("gen", "Autre site", "Web");
+    OTHER("gen", "Autre site", "Web"),
+    /** Fic gardée seulement sur le téléphone (importée d'un fichier), sans site à interroger. */
+    LOCAL("loc", "Sur le téléphone", "Local");
 
     companion object {
         fun of(code: String): Site = entries.firstOrNull { it.code == code } ?: OTHER

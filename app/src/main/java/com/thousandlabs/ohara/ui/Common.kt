@@ -147,6 +147,7 @@ fun siteColor(site: Site): Color = when (site) {
     Site.SB -> Color(0xFF8A5A2B)
     Site.WN -> Color(0xFF7A3FA0)
     Site.OTHER -> Color(0xFF5B6B66)
+    Site.LOCAL -> Color(0xFF3F6B4E)
 }
 
 @Composable

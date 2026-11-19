@@ -81,6 +81,7 @@ object ReadTracker {
             ?: ".p-body-pageContent,.block-body"
         Site.WN -> ".cha-words,.cha-content,.chapter_content,.chapter-content,#chapter-content,[class*=chapter-content],[class*=cha-paragraph]"
         Site.OTHER -> "article,#chapter-content,.chapter-content,.entry-content,main"
+        Site.LOCAL -> "#storytext"
     }
 
     fun script(info: LinkInfo): String {
@@ -120,6 +121,7 @@ setTimeout(tick,1200);setInterval(tick,8000);
                 ?: m.optString("h1").ifBlank { t.substringBefore(" Chapter ").substringBefore(" | ") }
             Site.SB -> m.optString("h1").ifBlank { t.substringBefore(" | ") }.replace(Regex("\\s*\\[?(Threadmarks?|Reader)\\]?.*$"), "").trim()
             Site.WN -> (m.optString("og").ifBlank { t }).split(" - ", " | ").let { parts -> if (parts.size >= 2) parts[parts.size - 2] else parts[0] }.trim()
+            Site.LOCAL -> m.optString("h1").ifBlank { t.substringBefore(" — ") }
             Site.OTHER -> m.optString("og").ifBlank { m.optString("h1").ifBlank { t } }
         }.trim().ifBlank { "Fic sans titre" }
     }

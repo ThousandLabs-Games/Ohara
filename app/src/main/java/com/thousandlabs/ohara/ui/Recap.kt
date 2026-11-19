@@ -111,7 +111,7 @@ fun RecapSheet(ficId: String, onDismiss: () -> Unit) {
         val p = runCatching { Recap.build(fic) }.getOrDefault(emptyList())
         parts = p
         if (Translate.enabled && p.isNotEmpty()) runCatching {
-            parts = p.map { part -> part.copy(sentences = part.sentences.map { Translate.text(it) }) }
+            parts = p.map { part -> part.copy(sentences = Translate.texts(part.sentences)) }
             translated = true
         }
     }

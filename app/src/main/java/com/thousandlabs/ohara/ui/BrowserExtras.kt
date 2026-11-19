@@ -97,6 +97,10 @@ scan();window.__ohTrT=setInterval(scan,2500);
         w.evaluateJavascript("if(window.__ohTr)window.__ohTr.restore()", null)
     }
 
+    private fun show(web: WebView, i: Int, fr: String) = web.post {
+        web.evaluateJavascript("if(window.__ohTr)window.__ohTr.set($i,${JSONObject.quote(fr)})", null)
+    }
+
     private fun work(json: String, web: WebView) {
         val gen = generation
         val items = runCatching { JSONArray(json) }.getOrNull() ?: return
@@ -104,16 +108,30 @@ scan();window.__ohTrT=setInterval(scan,2500);
             mutex.withLock {
                 if (gen != generation || !Translate.enabled) return@withLock
                 try {
-                    Translate.ensureModel { status = it }
+                    Translate.prepare { status = it }
                     status = "Traduction de la page…"
-                    for (k in 0 until items.length()) {
-                        if (gen != generation || !Translate.enabled) break
-                        val o = items.getJSONObject(k)
-                        val src = o.optString("t")
-                        val key = Names.signature() + "\u0000" + src
-                        val fr = cache[key] ?: Translate.text(src).also { cache[key] = it }
-                        web.evaluateJavascript("if(window.__ohTr)window.__ohTr.set(${o.optInt("i")},${JSONObject.quote(fr)})", null)
+                    val sig = Translate.signature()
+                    val all = List(items.length()) { items.getJSONObject(it) }
+                    // déjà traduits : affichés tout de suite
+                    val todo = all.filter { o -> synchronized(cache) { cache[sig + "\u0000" + o.optString("t")] }?.let { fr -> show(web, o.optInt("i"), fr); false } ?: true }
+                    // le haut de la page d'abord (petit paquet), puis le reste par paquets envoyés en même temps
+                    val groups = ArrayList<List<JSONObject>>()
+                    var cur = ArrayList<JSONObject>(); var size = 0
+                    for (o in todo) {
+                        val limit = if (groups.isEmpty()) 600 else 3500
+                        if (cur.isNotEmpty() && size + o.optString("t").length > limit) { groups += cur; cur = ArrayList(); size = 0 }
+                        cur += o; size += o.optString("t").length
                     }
+                    if (cur.isNotEmpty()) groups += cur
+                    suspend fun doGroup(g: List<JSONObject>) {
+                        if (gen != generation || !Translate.enabled) return
+                        val src = g.map { it.optString("t") }
+                        Translate.texts(src).forEachIndexed { k, fr -> synchronized(cache) { cache[sig + "\u0000" + src[k]] = fr }; show(web, g[k].optInt("i"), fr) }
+                    }
+                    groups.firstOrNull()?.let { doGroup(it) }
+                    if (Translate.online) kotlinx.coroutines.coroutineScope {
+                        groups.drop(1).map { g -> launch { doGroup(g) } }
+                    } else groups.drop(1).forEach { doGroup(it) }
                 } catch (e: Exception) {
                     Toast.show("Traduction impossible : ${e.message ?: "pas de connexion pour télécharger le modèle"}.")
                 } finally {

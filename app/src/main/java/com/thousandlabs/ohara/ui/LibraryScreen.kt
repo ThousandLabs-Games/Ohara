@@ -248,7 +248,7 @@ fun LibraryTab() {
                     }
                 }
                 FilterChip(selected = onlyNew, onClick = { onlyNew = !onlyNew }, label = { Text(if (newCount > 0) "Nouveautés  $newCount" else "Nouveautés") })
-                listOf(Site.FFN, Site.SB, Site.WN, Site.OTHER).filter { s -> fics.any { it.site == s } }.forEach { s ->
+                listOf(Site.FFN, Site.SB, Site.WN, Site.OTHER, Site.LOCAL).filter { s -> fics.any { it.site == s } }.forEach { s ->
                     FilterChip(selected = siteFilter == s.code, onClick = { siteFilter = if (siteFilter == s.code) "" else s.code }, label = { Text(s.short) })
                 }
             }

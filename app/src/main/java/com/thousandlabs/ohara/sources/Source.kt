@@ -38,7 +38,7 @@ interface Source {
 }
 
 object Sources {
-    val all: List<Source> = listOf(FanFictionNet, SpaceBattles, WebNovel)
+    val all: List<Source> = listOf(FanFictionNet, SpaceBattles, WebNovel, LocalSource)
 
     fun of(site: Site): Source = all.firstOrNull { it.site == site } ?: GenericSource
 

@@ -95,6 +95,7 @@ import com.thousandlabs.ohara.privacy.AdBlocker
 import com.thousandlabs.ohara.privacy.Privacy
 import com.thousandlabs.ohara.sources.GenericSource
 import com.thousandlabs.ohara.translate.Names
+import com.thousandlabs.ohara.translate.Translate as Tr
 import com.thousandlabs.ohara.update.AppUpdater
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -125,6 +126,8 @@ fun SettingsTab() {
             SectionTitle("Lecture et apparence")
             SettingRow("Lecture", "Chapitre suivant en glissant, mode lecture, « Précédemment », plein écran", Icons.AutoMirrored.Outlined.MenuBook, onClick = { Nav.push(Screen.Settings("lecture")) })
             SettingRow("Apparence", "Thème, couleur, icône de l'appli", Icons.Outlined.Palette, onClick = { Nav.push(Screen.Settings("apparence")) })
+            SettingRow("Traduction en français", if (Tr.online) "En ligne, haute qualité (repli sur le téléphone sans réseau)" else "Sur le téléphone uniquement",
+                Icons.Outlined.Translate, onClick = { Nav.push(Screen.Settings("traduction")) })
             SettingRow("Noms à ne pas traduire", if (!Names.enabled) "Désactivé" else (Names.FANDOMS.filter { it.enabled }.map { it.label } + listOfNotNull(Names.userNames.size.takeIf { it > 0 }?.let { Fmt.plural(it, "nom perso") }))
                 .joinToString(", ").ifBlank { "Aucune liste active" }, Icons.Outlined.Translate, onClick = { Nav.push(Screen.Settings("noms")) })
             SectionTitle("Découverte")
@@ -167,7 +170,7 @@ fun SettingsDetailScreen(section: String) {
     val title = when (section) {
         "lecture" -> "Lecture"; "apparence" -> "Apparence"; "filtre" -> "Filtre anti-déchets"; "masquage" -> "Passages masqués"
         "telechargement" -> "Téléchargements"; "confidentialite" -> "Bloqueur et anti-pistage"; "sauvegarde" -> "Sauvegarde"
-        "sources" -> "Sites ajoutés"; "maj" -> "Mises à jour"; "avance" -> "Navigation libre"; "score" -> "Score « Prometteuse »"; "noms" -> "Noms à ne pas traduire"; else -> "Réglages"
+        "sources" -> "Sites ajoutés"; "maj" -> "Mises à jour"; "avance" -> "Navigation libre"; "score" -> "Score « Prometteuse »"; "noms" -> "Noms à ne pas traduire"; "traduction" -> "Traduction en français"; else -> "Réglages"
     }
     Scaffold(topBar = { BackTopBar(title) }) { pad ->
         Column(Modifier.fillMaxSize().padding(pad).verticalScroll(rememberScrollState()).padding(bottom = 48.dp)) {
@@ -184,6 +187,7 @@ fun SettingsDetailScreen(section: String) {
                 "avance" -> AdvancedSection()
                 "score" -> ScoreSection()
                 "noms" -> NamesSection()
+                "traduction" -> TranslationSection()
             }
         }
     }
@@ -562,6 +566,23 @@ private fun ScoreSection() {
     TextButton(onClick = { sc.reset(); Toast.show("Valeurs d'origine rétablies.") }, modifier = Modifier.padding(horizontal = 8.dp)) { Text("Rétablir les valeurs d'origine") }
     Text("Sur la fiche d'une fic, touchez la ligne « Score » pour voir le détail du calcul.", Modifier.padding(horizontal = 16.dp),
         style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+}
+
+@Composable
+private fun TranslationSection() {
+    var online by remember { mutableStateOf(Tr.online) }
+    NoteCard("La traduction en ligne envoie chaque paragraphe entier au service de traduction de Google : le français est bien plus naturel " +
+        "(expressions, tutoiement, ton des dialogues) et une page se traduit en quelques secondes, plusieurs paquets partant en même temps. " +
+        "Sans réseau, ou si le service ne répond pas, Ohara repasse tout seul sur le modèle du téléphone.", icon = Icons.Outlined.Translate)
+    SwitchRow("Traduction en ligne (recommandé)", "Meilleure qualité, plus rapide. Le texte de la page est envoyé au service de traduction.", online) {
+        online = it; Tr.online = it; BrowserHolder.retranslateOpenTab()
+    }
+    Text(if (online) "Hors connexion, le modèle du téléphone (environ 30 Mo, téléchargé une seule fois) prend le relais."
+        else "Tout reste sur le téléphone : rien n'est envoyé, mais la traduction est plus littérale et plus lente.",
+        Modifier.padding(horizontal = 16.dp, vertical = 8.dp), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    Text("Dans les deux cas, les noms protégés restent tels quels, la typographie est mise à la française (guillemets « », espaces avant ! ? : ;) " +
+        "et chaque paragraphe traduit est gardé : un chapitre déjà lu se réaffiche aussitôt.",
+        Modifier.padding(horizontal = 16.dp, vertical = 4.dp), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
 }
 
 @OptIn(ExperimentalLayoutApi::class)

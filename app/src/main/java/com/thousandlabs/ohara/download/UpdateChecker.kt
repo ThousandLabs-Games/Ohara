@@ -36,7 +36,7 @@ object UpdateChecker {
 
     /** Fics à surveiller : tout sauf les fics lues jusqu'au bout et terminées, et les fics abandonnées. */
     private fun watched() = Library.fics.value.filter { f ->
-        !f.deletedFromSite && Shelves.ABANDONED !in f.shelves &&
+        f.site != com.thousandlabs.ohara.data.Site.LOCAL && !f.deletedFromSite && Shelves.ABANDONED !in f.shelves &&
             !(f.status == FicStatus.COMPLETE && f.maxChapterRead >= f.totalChapters - 1 && f.totalChapters > 0)
     }
 

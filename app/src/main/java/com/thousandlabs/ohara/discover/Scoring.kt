@@ -73,7 +73,7 @@ object Scoring {
                 0.5 * l(v / months / 40) + 0.3 * l(f.replies / chapters) + 0.2 * l(f.likes / chapters / 3)
             }
             Site.WN -> 0.6 * l(f.views / months / 300) + 0.4 * l(f.favs / months / 3)
-            Site.OTHER -> 1.6
+            Site.OTHER, Site.LOCAL -> 1.6
         }
         val base = squash(interest, mid = 2.6, spread = 0.75)
         if (base >= 70) reasons += "Beaucoup de lecteurs pour son âge"
