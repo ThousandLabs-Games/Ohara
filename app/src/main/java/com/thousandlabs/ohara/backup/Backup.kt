@@ -140,7 +140,9 @@ object Backup {
             if (absent.isNotEmpty()) Library.replaceAll(Library.fics.value + absent)
             for (f in list) {
                 if (f in absent) continue
-                Library.update(f.id) {
+                Library.update(f.id) { cur ->
+                    // fic importée : la nouvelle version du fichier apporte les nouveaux chapitres et la fiche à jour
+                    val it = if (f.site == com.thousandlabs.ohara.data.Site.LOCAL) cur.mergeSiteData(f) else cur
                     if (f.maxChapterRead > it.maxChapterRead) it.copy(
                         progressChapter = f.progressChapter, progressPos = f.progressPos, maxChapterRead = f.maxChapterRead,
                         shelves = it.shelves + f.shelves,
@@ -160,7 +162,7 @@ object Backup {
             val target = File(dest, dir.name).apply { mkdirs() }
             dir.listFiles()?.forEach { file ->
                 val t = File(target, file.name)
-                if (replace || !t.exists()) { if (!file.renameTo(t)) { file.copyTo(t, overwrite = true) } }
+                if (replace || !t.exists() || dir.name.startsWith("loc_")) { if (!file.renameTo(t)) { file.copyTo(t, overwrite = true) } }
             }
         }
         tmp.deleteRecursively()
