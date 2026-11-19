@@ -69,6 +69,12 @@ fun OharaRoot() {
         val holder = rememberSaveableStateHolder()
         Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
             Box(Modifier.fillMaxSize()) {
+                // Retour sur le premier écran : si une nouvelle icône attend, Ohara se ferme vraiment
+                // (depuis Android 12, le retour laisse sinon l'appli ouverte en arrière-plan et l'icône ne change pas).
+                BackHandler(true) {
+                    val a = Locker.activity
+                    if (a != null && com.thousandlabs.ohara.IconSwitcher.needsChange(a)) a.finish() else a?.moveTaskToBack(true)
+                }
                 BackHandler(enabled = Nav.stack.size > 1) { Nav.pop() }
                 val depth = Nav.stack.size
                 androidx.compose.animation.AnimatedContent(

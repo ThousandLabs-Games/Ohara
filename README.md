@@ -38,7 +38,7 @@ Ohara réunit au même endroit la recherche, la lecture, le téléchargement et 
 
 ### Le reste
 - Sauvegarde et restauration dans un seul fichier `.ohara`, statistiques de lecture, verrouillage par empreinte.
-- Quatre icônes qui suivent le moment de la journée, mises à jour depuis les versions GitHub, guide « Comment faire » intégré.
+- Quatre icônes qui suivent le moment de la journée (changement à l'heure de chaque tranche, ou icône fixe appliquée tout de suite depuis les réglages), mises à jour depuis les versions GitHub, guide « Comment faire » intégré.
 
 ## Installation
 

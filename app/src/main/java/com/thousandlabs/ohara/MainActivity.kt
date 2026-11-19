@@ -94,6 +94,7 @@ class MainActivity : FragmentActivity() {
         AdBlocker.flushCount()
         Library.saveNow()
         com.thousandlabs.ohara.ui.BrowserHolder.saveTabs()
+        if (!isChangingConfigurations && IconSwitcher.needsChange(this)) runCatching { IconSwitcher.scheduleSoon(applicationContext) }
     }
 
     override fun onDestroy() {
@@ -103,7 +104,7 @@ class MainActivity : FragmentActivity() {
             com.thousandlabs.ohara.net.HiddenHost.container = null
         }
         // l'icône ne change que quand l'appli est vraiment fermée (sinon Android ferme la tâche en cours)
-        if (isFinishing) IconSwitcher.apply(applicationContext)
+        if (isFinishing && !isChangingConfigurations) IconSwitcher.apply(applicationContext)
         super.onDestroy()
     }
 

@@ -227,6 +227,7 @@ private val GUIDE = listOf(
     "Sites FanFiction.net et WebNovel" to "Si un site demande « Je ne suis pas un robot », cochez la case : c'est lui qui vérifie. Si un site affiche une erreur 504 ou semblable, son serveur ne répond pas : « Réessayer » un peu plus tard.",
     "Navigation libre" to "Le navigateur est limité aux sites de fics. Pour tous les sites : Réglages › touchez sept fois la ligne de version, puis Réglages › Navigation libre, avec un moteur de recherche respectueux de la vie privée.",
     "Sauvegarder la bibliothèque" to "Réglages › Sauvegarde : un seul fichier contient tout. Pour changer de téléphone, copiez ce fichier puis « Restaurer » sur le nouveau.",
+    "Changer l'icône de l'appli" to "Réglages › Icône de l'appli : « Automatique selon l'heure » (arbre le matin, stèle l'après-midi, bibliothèque le soir, île la nuit) ou une seule icône fixe. Pour ne pas interrompre la lecture, l'icône change quand Ohara est fermée : bouton retour depuis le premier écran, appli balayée des applis récentes (le changement suit en une minute environ) ou bouton « Appliquer maintenant », qui ferme Ohara. Appli fermée, l'icône change à l'heure de chaque tranche, à quelques minutes près selon le téléphone.",
     "Verrouiller l'appli et mettre à jour" to "Réglages › Bloqueur et anti-pistage › Verrouiller Ohara par empreinte. Réglages › Mises à jour › « Télécharger et installer » pour la dernière version publiée sur GitHub."
 )
 
@@ -255,6 +256,11 @@ fun GuideScreen() {
 // ---------- Nouveautés de l'appli ----------
 
 private val VERSIONS = listOf(
+    "Icône corrigée — 19 novembre 2026 (nuit)" to listOf(
+        "L'icône choisie dans les réglages s'applique enfin : bouton « Appliquer maintenant », ou retour depuis le premier écran, qui ferme désormais vraiment Ohara quand une nouvelle icône attend.",
+        "L'icône automatique change à l'heure : réveil au début de chaque tranche (6 h, 12 h, 18 h, 21 h) et vérification toutes les 15 minutes au lieu d'une fois par heure.",
+        "Appli balayée des applis récentes : la nouvelle icône s'affiche environ une minute après. Ohara laissée en arrière-plan n'est jamais fermée."
+    ),
     "Traduction corrigée — 19 novembre 2026" to listOf(
         "Les noms de personnages ne sont plus suivis d'un mot parasite (« Luffy personne ») : la traduction en ligne prenait le repère du nom pour un nombre.",
         "La page ne saute plus pendant la traduction : quand un paragraphe au-dessus de l'écran change de longueur, la lecture reste au même endroit.",

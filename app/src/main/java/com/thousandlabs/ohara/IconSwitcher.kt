@@ -5,6 +5,8 @@ import android.content.Context
 import android.content.pm.PackageManager
 import androidx.work.CoroutineWorker
 import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.ExistingWorkPolicy
+import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
@@ -46,6 +48,17 @@ object IconSwitcher {
         }
     }
 
+    /** Vrai si l'icône affichée n'est plus celle qu'il faudrait (heure passée ou choix manuel). */
+    fun needsChange(context: Context): Boolean = runCatching { current(context) != wanted() }.getOrDefault(false)
+
+    /** Minutes jusqu'au prochain changement de tranche horaire (6 h, 12 h, 18 h, 21 h). */
+    private fun minutesToNextSlot(): Long {
+        val now = Calendar.getInstance()
+        val h = now.get(Calendar.HOUR_OF_DAY); val m = now.get(Calendar.MINUTE)
+        val next = listOf(6, 12, 18, 21).firstOrNull { it > h } ?: 30 // 30 = 6 h le lendemain
+        return ((next - h) * 60L - m).coerceAtLeast(1)
+    }
+
     /** Active la bonne icône (la nouvelle d'abord, puis on éteint les autres : il y en a toujours une). */
     fun apply(context: Context) {
         val target = wanted()
@@ -63,9 +76,31 @@ object IconSwitcher {
         }
     }
 
+    /**
+     * Vérification régulière (toutes les 15 minutes, le minimum permis par Android)
+     * et réveil précis au prochain changement de tranche horaire.
+     */
     fun schedule(context: Context) {
-        val req = PeriodicWorkRequestBuilder<IconWorker>(1, TimeUnit.HOURS).build()
-        WorkManager.getInstance(context).enqueueUniquePeriodicWork("icone_du_moment", ExistingPeriodicWorkPolicy.KEEP, req)
+        val wm = WorkManager.getInstance(context)
+        val req = PeriodicWorkRequestBuilder<IconWorker>(15, TimeUnit.MINUTES).build()
+        wm.enqueueUniquePeriodicWork("icone_du_moment", ExistingPeriodicWorkPolicy.UPDATE, req)
+        scheduleNextSlot(context)
+    }
+
+    fun scheduleNextSlot(context: Context) {
+        val req = OneTimeWorkRequestBuilder<IconWorker>().setInitialDelay(minutesToNextSlot() + 1, TimeUnit.MINUTES)
+            .setInputData(androidx.work.workDataOf("tranche" to true)).build()
+        WorkManager.getInstance(context).enqueueUniqueWork("icone_tranche", ExistingWorkPolicy.REPLACE, req)
+    }
+
+    /**
+     * Appelé quand Ohara passe en arrière-plan avec une icône à changer : si l'appli est ensuite
+     * balayée des applis récentes (processus arrêté), le changement se fait une minute plus tard.
+     * Si elle est simplement en arrière-plan, rien ne change et votre lecture reste intacte.
+     */
+    fun scheduleSoon(context: Context) {
+        val req = OneTimeWorkRequestBuilder<IconWorker>().setInitialDelay(1, TimeUnit.MINUTES).build()
+        WorkManager.getInstance(context).enqueueUniqueWork("icone_bientot", ExistingWorkPolicy.REPLACE, req)
     }
 }
 
@@ -74,6 +109,8 @@ class IconWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
         // Changer d'icône pendant que l'appli est ouverte (même en arrière-plan) ferme sa tâche :
         // on attend qu'elle soit vraiment fermée.
         if (com.thousandlabs.ohara.ui.Locker.activity == null) IconSwitcher.apply(applicationContext)
+        // le réveil de tranche se reprogramme pour la suivante
+        if (inputData.getBoolean("tranche", false)) runCatching { IconSwitcher.scheduleNextSlot(applicationContext) }
         return Result.success()
     }
 }

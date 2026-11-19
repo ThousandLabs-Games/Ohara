@@ -48,6 +48,7 @@ import androidx.compose.material.icons.outlined.NewReleases
 import androidx.compose.material.icons.outlined.Palette
 import androidx.compose.material.icons.outlined.Public
 import androidx.compose.material.icons.outlined.Restore
+import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Shield
 import androidx.compose.material.icons.outlined.SystemUpdate
 import androidx.compose.material.icons.outlined.Translate
@@ -259,13 +260,13 @@ private fun AppearanceSection() {
     Text("L'icône suit le moment de la journée : matin, l'arbre-bibliothèque sur son île ; après-midi, la stèle gravée ; soir, l'intérieur de la bibliothèque ; nuit, l'île sous la lune. Vous pouvez aussi en garder une seule.",
         Modifier.padding(horizontal = 16.dp), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     Spacer(Modifier.height(12.dp))
-    FilterChip(selected = IconSwitcher.fixed < 0, onClick = { IconSwitcher.fixed = -1; Toast.show("L'icône suivra l'heure à partir de la prochaine fermeture d'Ohara.") },
+    FilterChip(selected = IconSwitcher.fixed < 0, onClick = { IconSwitcher.fixed = -1; Toast.show("L'icône suivra l'heure : elle change à la fermeture d'Ohara, ou tout de suite avec « Appliquer maintenant ».") },
         label = { Text("Automatique selon l'heure") }, modifier = Modifier.padding(horizontal = 16.dp))
     Row(Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.SpaceBetween) {
         ICONS.forEach { (bg, fg, slot) ->
             val sel = IconSwitcher.fixed == slot.ordinal
             Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.clickable {
-                IconSwitcher.fixed = slot.ordinal; Toast.show("Icône « ${slot.label} » choisie : elle s'affichera à la prochaine fermeture d'Ohara.")
+                IconSwitcher.fixed = slot.ordinal; Toast.show("Icône « ${slot.label} » choisie : touchez « Appliquer maintenant » ou fermez Ohara.")
             }) {
                 Box(Modifier.then(if (sel) Modifier.border(3.dp, MaterialTheme.colorScheme.primary, CircleShape) else Modifier).padding(3.dp)) { AppIcon(bg, fg) }
                 Text(slot.label, style = MaterialTheme.typography.labelMedium)
@@ -273,7 +274,13 @@ private fun AppearanceSection() {
             }
         }
     }
-    Text("L'icône change seulement quand Ohara est fermée (bouton retour ou appli balayée), pour ne jamais interrompre votre lecture. Le lanceur peut mettre quelques secondes à l'afficher.", Modifier.padding(horizontal = 16.dp),
+    OutlinedButton(onClick = { Locker.activity?.finish() }, modifier = Modifier.padding(horizontal = 16.dp)) {
+        Icon(Icons.Outlined.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
+        Spacer(Modifier.width(8.dp))
+        Text("Appliquer maintenant (ferme Ohara)")
+    }
+    Spacer(Modifier.height(8.dp))
+    Text("Pour ne jamais interrompre votre lecture, l'icône change quand Ohara est fermée : bouton retour depuis le premier écran, appli balayée des applis récentes (le changement suit alors en une minute environ) ou bouton ci-dessus. Appli fermée, elle change à l'heure de chaque tranche, à quelques minutes près selon le téléphone. Le lanceur peut mettre quelques secondes à l'afficher.", Modifier.padding(horizontal = 16.dp),
         style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
 }
 
