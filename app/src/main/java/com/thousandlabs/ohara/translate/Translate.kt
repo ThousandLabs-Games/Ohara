@@ -87,7 +87,7 @@ object Translate {
     /** Abréviations suivies d'un point qui ne terminent pas une phrase (« Mr. 3 », « Dr. Kureha », « Mt. Colubo »). */
     private val ABBR = setOf("mr", "mrs", "ms", "dr", "st", "mt", "lt", "sgt", "capt", "col", "gen", "jr", "sr", "vs", "prof", "no", "vol", "ch", "fig", "approx")
 
-    private val END_RX = Regex("[.!?…]+[\"'”’»)\\]*_~]*\\s+")
+    private val END_RX = Regex("[.!?…]+[\"'”’»)\\]*_~\u27e7\u27eb]*\\s+")
 
     /** Coupe un paragraphe en phrases, sans couper « Mr. 3 », « Monkey D. Luffy » ni « … puis il partit ». */
     internal fun sentences(s: String): List<String> {
@@ -153,7 +153,7 @@ object Translate {
         set(v) { Prefs.putBool("tr_online", v); namesChanged() }
 
     /** Les traductions gardées dépendent des noms protégés et du moteur qui les a faites. */
-    fun signature(): String = Names.signature() + if (online) "|g2" else "|m1"
+    fun signature(): String = Names.signature() + if (online) "|g3" else "|m2"
 
     /** Prépare la traduction : rien à faire en ligne, le modèle du téléphone sinon. */
     suspend fun prepare(onProgress: (String) -> Unit = {}) { if (!online) ensureModel(onProgress) }
@@ -172,44 +172,107 @@ object Translate {
         return parts.map { client.translate(it).await().trim() }.joinToString(" ")
     }
 
-    private suspend fun engine(texts: List<String>): List<String> {
+    // ---------- Contrôle du résultat ----------
+
+    private val EN_WORDS = hashSetOf("the", "and", "of", "to", "in", "that", "is", "was", "he", "she", "it", "with", "for", "on", "as", "you", "his", "her",
+        "they", "had", "have", "this", "but", "not", "be", "are", "at", "from", "what", "said", "were", "would", "could", "there", "their", "been", "him", "who")
+    private val FR_WORDS = hashSetOf("le", "la", "les", "des", "est", "une", "que", "qui", "dans", "pour", "pas", "vous", "nous", "je", "il", "elle", "et",
+        "un", "du", "au", "sur", "avec", "mais", "ce", "ne", "se", "sont", "ont", "fait", "très", "ils", "elles", "mon", "ton", "son", "sa", "ses", "cette")
+    private val WORD_RX = Regex("[\\p{L}']+")
+
+    private fun wordList(s: String): List<String> = WORD_RX.findAll(s.lowercase()).map { it.value }.toList()
+    internal fun englishScore(s: String): Int = wordList(s).count { it in EN_WORDS }
+    internal fun frenchScore(s: String): Int = wordList(s).count { it in FR_WORDS }
+
+    /** Texte déjà en français (fic écrite en français, passage cité) : inutile de le traduire. */
+    internal fun alreadyFrench(s: String): Boolean {
+        val fr = frenchScore(s)
+        return fr >= 2 && fr >= englishScore(s) * 3
+    }
+
+    /**
+     * La traduction est-elle plausible ? Refuse : vide, trop courte ou trop longue par rapport au texte,
+     * ou texte rendu tel quel alors qu'il est clairement en anglais.
+     */
+    internal fun good(src: String, tr: String): Boolean {
+        val t = Marks.strip(tr).trim()
+        if (t.isEmpty()) return false
+        val sl = Marks.strip(src).count { it.isLetter() }
+        if (sl < 3) return true
+        val tl = t.count { it.isLetter() }
+        if (sl >= 25 && (tl < sl * 0.3 || tl > sl * 3.5)) return false
+        if (sl >= 12 && englishScore(src) >= 2 && t.equals(Marks.strip(src).trim(), ignoreCase = true)) return false
+        return true
+    }
+
+    /** Un texte traduit, et s'il vient du téléphone alors que la traduction en ligne était voulue (qualité moindre). */
+    class Out(val text: String, val fallback: Boolean)
+
+    /** Combien de textes ont dû passer par le modèle du téléphone depuis le début : l'affichage peut prévenir. */
+    @Volatile var fallbackCount = 0
+        private set
+
+    /** Dans combien de temps le service en ligne sera réessayé (0 s'il est disponible), en millisecondes. */
+    val onlineRetryIn: Long get() = Online.pausedFor
+
+    /**
+     * Chaque texte est traduit en ligne ; ceux dont le résultat est douteux repartent un par un ;
+     * ceux qui échouent encore (ou si le service est coupé) passent sur le téléphone.
+     */
+    private suspend fun engine(texts: List<String>): List<Out> {
         if (texts.isEmpty()) return emptyList()
+        val res = arrayOfNulls<Out>(texts.size)
         if (online && Online.available) {
-            try { return Online.translate(texts) } catch (e: kotlinx.coroutines.CancellationException) { throw e } catch (_: Exception) { }
+            try {
+                Online.translate(texts).forEachIndexed { i, r -> if (good(texts[i], r)) res[i] = Out(r, false) }
+                val bad = res.indices.filter { res[it] == null }
+                if (bad.isNotEmpty() && Online.available) {
+                    Online.translate(bad.map { texts[it] }, alone = true).forEachIndexed { k, r -> if (good(texts[bad[k]], r)) res[bad[k]] = Out(r, false) }
+                }
+            } catch (e: kotlinx.coroutines.CancellationException) { throw e } catch (_: Exception) { }
         }
-        return texts.map { device(it) }
+        var used = 0
+        for (i in res.indices) if (res[i] == null) { res[i] = Out(device(texts[i]), online); used++ }
+        if (used > 0 && online) fallbackCount += used
+        return res.map { it!! }
     }
 
     /**
      * Traduction de morceaux, avec les noms protégés (personnages, îles, techniques…) gardés tels quels
      * et les termes officiels mis en français. Si le traducteur abîme un repère, ce morceau seulement est retraduit sans protection.
      */
-    private suspend fun translatePieces(src: List<String>): List<String> {
+    private suspend fun translatePieces(src: List<String>): List<Out> {
         val word = online && Online.available
         val prot = src.map { Names.protect(it, word) }
-        val res = arrayOfNulls<String>(src.size)
+        val res = arrayOfNulls<Out>(src.size)
         val send = ArrayList<Int>()
         prot.forEachIndexed { i, p ->
             // morceau fait seulement de noms (« Usopp ! ») : rien à traduire
-            if (!p.isEmpty && !Regex("\\p{L}{2}").containsMatchIn(p.bare())) res[i] = p.fill() else send += i
+            if (!p.isEmpty && !Regex("\\p{L}{2}").containsMatchIn(p.bare())) res[i] = Out(p.fill(), false) else send += i
         }
         val first = engine(send.map { prot[it].text })
         val retry = ArrayList<Int>()
-        send.forEachIndexed { k, i -> prot[i].restore(first[k])?.let { res[i] = it } ?: retry.add(i) }
+        send.forEachIndexed { k, i -> prot[i].restore(first[k].text)?.let { res[i] = Out(it, first[k].fallback) } ?: retry.add(i) }
         if (retry.isNotEmpty()) engine(retry.map { src[it] }).forEachIndexed { k, r -> res[retry[k]] = r }
-        return res.map { it ?: "" }
+        return res.map { it ?: Out("", false) }
     }
 
     /** Traduit plusieurs paragraphes d'un coup (en ligne, ils partent ensemble). */
-    private suspend fun rawMany(list: List<String>): List<String> {
+    private suspend fun rawMany(list: List<String>): List<Out> {
         val max = if (online && Online.available) Online.MAX_CHARS - 200 else 300
-        val split = list.map { pieces(it, max) }
+        // texte déjà en français : gardé tel quel
+        val keep = list.map { alreadyFrench(Marks.strip(it)) }
+        val split = list.mapIndexed { i, p -> if (keep[i]) emptyList() else pieces(p, max) }
         val tr = translatePieces(split.flatten().map { it.text })
         var k = 0
-        return split.map { ps ->
+        return split.mapIndexed { n, ps ->
+            if (keep[n]) return@mapIndexed Out(list[n], false)
             val out = StringBuilder()
+            var fb = false
             for (pc in ps) {
-                var r = tr[k++].trim()
+                val o = tr[k++]
+                if (o.fallback) fb = true
+                var r = o.text.trim()
                 if (pc.shout) r = r.uppercase(java.util.Locale.FRENCH)
                 // Le traducteur met parfois une minuscule en tête (terme remplacé, phrase commençant par un nom…).
                 val a = pc.text.firstOrNull { it.isLetter() }; val i = r.indexOfFirst { it.isLetter() }
@@ -217,22 +280,28 @@ object Translate {
                 if (out.isNotEmpty()) out.append(' ')
                 out.append(r)
             }
-            Typo.french(out.toString())
+            Out(Marks.fix(list[n], Typo.french(out.toString())), fb)
         }
     }
 
-    /** Traduit des textes courts (des paragraphes) ; ceux déjà vus sont rendus aussitôt. */
-    suspend fun texts(list: List<String>): List<String> {
+    /**
+     * Traduit des textes courts (des paragraphes) ; ceux déjà vus sont rendus aussitôt.
+     * Le texte peut porter des repères d'italique et de gras ([Marks]) ; ils reviennent s'ils ont survécu à la traduction.
+     * Les traductions de secours (téléphone) ne sont pas gardées : elles seront refaites dès que le service en ligne répond.
+     */
+    suspend fun textsEx(list: List<String>): List<Out> {
         val sig = signature()
-        val out = arrayOfNulls<String>(list.size)
+        val out = arrayOfNulls<Out>(list.size)
         val miss = ArrayList<Int>()
-        list.forEachIndexed { i, s -> synchronized(memo) { memo[sig + "\u0000" + s] }?.let { out[i] = it } ?: miss.add(i) }
+        list.forEachIndexed { i, s -> synchronized(memo) { memo[sig + "\u0000" + s] }?.let { out[i] = Out(it, false) } ?: miss.add(i) }
         if (miss.isNotEmpty()) {
             val r = rawMany(miss.map { list[it] })
-            synchronized(memo) { miss.forEachIndexed { k, i -> out[i] = r[k]; memo[sig + "\u0000" + list[i]] = r[k] } }
+            synchronized(memo) { miss.forEachIndexed { k, i -> out[i] = r[k]; if (!r[k].fallback) memo[sig + "\u0000" + list[i]] = r[k].text } }
         }
-        return out.map { it ?: "" }
+        return out.map { it ?: Out("", false) }
     }
+
+    suspend fun texts(list: List<String>): List<String> = textsEx(list).map { it.text }
 
     /** Traduit un texte court (un paragraphe). */
     suspend fun text(s: String): String = texts(listOf(s)).first()
@@ -261,7 +330,7 @@ object Translate {
         for (chunk in todo.chunked(step)) {
             onProgress("Traduction : ${done + 1}/${todo.size} paragraphes…")
             val src = chunk.map { it.value }
-            rawMany(src).forEachIndexed { k, fr -> cache.put(src[k], fr) }
+            rawMany(src).forEachIndexed { k, fr -> cache.put(src[k], fr.text) }
             done += chunk.size
         }
         list.forEach { el -> cache.optString(el.text().trim()).takeIf { it.isNotEmpty() }?.let { el.text(it) } }

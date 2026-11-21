@@ -18,8 +18,10 @@ import org.json.JSONObject
 
 /**
  * Traduction des pages du navigateur, comme dans les navigateurs habituels : un bouton, et toutes les pages
- * s'affichent en français jusqu'à ce qu'on le désactive. La traduction se fait sur le téléphone
- * (le modèle est téléchargé une seule fois) : rien n'est envoyé à un service extérieur.
+ * s'affichent en français jusqu'à ce qu'on le désactive. La traduction se fait en ligne par défaut (meilleure qualité),
+ * ou sur le téléphone (le modèle est téléchargé une seule fois) quand le service ne répond pas ou si on l'a choisi.
+ * Un paragraphe qui n'a pas pu être traduit est retenté automatiquement ; un paragraphe traduit par le téléphone
+ * faute de mieux est refait en ligne dès que le service répond de nouveau.
  */
 object PageTranslator {
     /** Message affiché pendant le travail (téléchargement du modèle, traduction de la page). */
@@ -44,19 +46,27 @@ object PageTranslator {
     const val JS = """(function(){
 if(window.__ohTr){window.__ohTr.scan();return;}
 try{document.documentElement.style.overflowAnchor='none';if(document.body)document.body.style.overflowAnchor='none';}catch(e){}
+var LANG=((document.documentElement&&document.documentElement.lang)||'').toLowerCase();
 var units=[];
 var INL={A:1,ABBR:1,B:1,BDI:1,BDO:1,CITE:1,DFN:1,EM:1,FONT:1,I:1,KBD:1,MARK:1,Q:1,S:1,SAMP:1,SMALL:1,SPAN:1,STRIKE:1,STRONG:1,SUB:1,SUP:1,TIME:1,U:1,VAR:1,LABEL:1,INS:1,DEL:1,NOBR:1,WBR:1};
 var SKIP='script,style,noscript,textarea,code,pre,select,option,button,input';
+var OP={i:'⟦',b:'⟪'},CL={i:'⟧',b:'⟫'};
 function blockOf(n){var p=n.parentElement;while(p&&INL[p.tagName]&&p.parentElement)p=p.parentElement;return p;}
-function ok(n){if(n.__oh||!n.nodeValue||!n.nodeValue.trim())return false;var p=n.parentElement;return !!p&&!p.closest(SKIP);}
+function inSkip(n){var p=n.parentElement;return !p||!!p.closest(SKIP);}
+function ok(n){if(n.__oh||!n.nodeValue||!n.nodeValue.trim())return false;if(n.__ohF&&Date.now()<n.__ohF)return false;return !inSkip(n);}
+/* mise en forme d'un morceau de texte : i = italique, b = gras, '' = normal */
+function fmtOf(n,b){var p=n.parentElement,f='';while(p&&p!==b){var g=p.tagName;if(g==='I'||g==='EM'||g==='CITE'||g==='DFN'||g==='VAR')return 'i';if(g==='B'||g==='STRONG')f='b';p=p.parentElement;}return f;}
+function marked(ns){var s='',cur='';ns.forEach(function(x){var f=x.__f||'';if(f!==cur){if(cur)s+=CL[cur];if(f)s+=OP[f];cur=f;}s+=x.nodeValue;});if(cur)s+=CL[cur];return s;}
 function unitsOf(b){var res=[],cur=[];var w=document.createTreeWalker(b,5,null);var n;
 while((n=w.nextNode())){if(n.nodeType===1){if(n.tagName==='BR'||!INL[n.tagName]){if(cur.length)res.push(cur);cur=[];}continue;}
-if(blockOf(n)!==b)continue;if(ok(n))cur.push(n);}
+if(blockOf(n)!==b)continue;
+/* un blanc entre deux morceaux d'une même phrase (« il dit <i>non</i> <b>fort</b> ») fait partie de la phrase */
+if(ok(n)||(cur.length&&!n.__oh&&n.nodeValue&&!n.nodeValue.trim()&&!inSkip(n)))cur.push(n);}
 if(cur.length)res.push(cur);return res;}
-function scan(){if(!document.body)return;var w=document.createTreeWalker(document.body,4,null);var n,blocks=[];
+function scan(){if(!document.body||LANG.indexOf('fr')===0)return;var w=document.createTreeWalker(document.body,4,null);var n,blocks=[];
 while((n=w.nextNode())){if(!ok(n))continue;var b=blockOf(n);if(b&&!b.__ohS){b.__ohS=1;blocks.push(b);}}
-var fresh=[];blocks.forEach(function(b){b.__ohS=0;unitsOf(b).forEach(function(ns){ns.forEach(function(x){x.__oh=1;});
-var t=ns.map(function(x){return x.nodeValue;}).join('').replace(/\s+/g,' ').trim();
+var fresh=[];blocks.forEach(function(b){b.__ohS=0;unitsOf(b).forEach(function(ns){ns.forEach(function(x){x.__oh=1;x.__f=fmtOf(x,b);});
+var t=marked(ns).replace(/\s+/g,' ').trim();
 if(t.length<2||!/[A-Za-z]{2}/.test(t))return;fresh.push({n:ns,b:b,t:t});});});
 if(!fresh.length)return;var h=window.innerHeight||800;
 fresh.forEach(function(u){var r=u.b.getBoundingClientRect();u.k=(r.bottom>0&&r.top<h)?r.top-100000:(r.top<0?h-r.top:r.top);});
@@ -64,15 +74,28 @@ fresh.sort(function(x,y){return x.k-y.k;});
 var batch=[];fresh.slice(0,400).forEach(function(u){units.push(u);batch.push({i:units.length-1,t:u.t});});
 fresh.slice(400).forEach(function(u){u.n.forEach(function(x){x.__oh=0;});});
 OharaTr.texts(JSON.stringify(batch));}
-window.__ohTr={scan:scan,
-set:function(i,t){var u=units[i];if(!u)return;var ns=u.n;var tg=null;
+/* range chaque morceau traduit dans le bon élément (italique, gras, normal) ; null si l'ordre ne correspond plus */
+function assign(u,segs){var ns=u.n,out=ns.map(function(){return '';}),p=0;
+for(var s=0;s<segs.length;s++){var g=segs[s],k=-1;for(var j=p;j<ns.length;j++){if((ns[j].__f||'')===g.f){k=j;break;}}if(k<0)return null;out[k]+=g.t;p=k;}
+return out;}
+var api={scan:scan,
+set:function(i,t){var u=units[i];if(!u||!t||!t.replace(/[⟦⟧⟪⟫\s]/g,''))return;u.done=1;var ns=u.n;
 var r0=u.b.getBoundingClientRect(),up=r0.top<0;
-for(var k=0;k<ns.length;k++){if(ns[k].parentElement===u.b){tg=ns[k];break;}}if(!tg)tg=ns[0];
 var a=ns[0].__orig!=null?ns[0].__orig:ns[0].nodeValue,z=ns[ns.length-1].__orig!=null?ns[ns.length-1].__orig:ns[ns.length-1].nodeValue;
 var lead=a.match(/^\s*/)[0],trail=z.match(/\s*$/)[0];
-ns.forEach(function(x){if(x.__orig==null)x.__orig=x.nodeValue;x.nodeValue=(x===tg)?lead+t+trail:'';});
+var segs=[],f='';t.split(/([⟦⟧⟪⟫])/).forEach(function(p){if(p==='⟦')f='i';else if(p==='⟪')f='b';else if(p==='⟧'||p==='⟫')f='';else if(p)segs.push({f:f,t:p});});
+var out=assign(u,segs);
+if(!out){out=ns.map(function(){return '';});var tg=0;for(var k=0;k<ns.length;k++){if(ns[k].parentElement===u.b){tg=k;break;}}out[tg]=segs.map(function(s){return s.t;}).join('');}
+var fi=-1,la=-1;out.forEach(function(x,k){if(x){if(fi<0)fi=k;la=k;}});
+if(fi>=0){out[fi]=lead+out[fi];out[la]=out[la]+trail;}
+ns.forEach(function(x,k){if(x.__orig==null)x.__orig=x.nodeValue;x.nodeValue=out[k];});
 if(up){var d=u.b.getBoundingClientRect().bottom-r0.bottom;if(d)window.scrollBy(0,d);}},
-restore:function(){units.forEach(function(u){u.n.forEach(function(x){if(x.__orig!=null){x.nodeValue=x.__orig;x.__orig=null;}x.__oh=0;});});units=[];clearInterval(window.__ohTrT);window.__ohTr=null;}};
+/* la traduction a échoué : le morceau sera retenté au prochain passage, de plus en plus tard, cinq fois au plus */
+fail:function(i,ms){var u=units[i];if(!u||u.done)return;u.n.forEach(function(x){x.__ohC=(x.__ohC||0)+1;if(x.__ohC<=5){x.__ohF=Date.now()+Math.min(60000,ms*Math.pow(2,x.__ohC-1));x.__oh=0;}});},
+/* traduit par le téléphone faute de mieux : refait en ligne plus tard (quatre fois au plus) */
+again:function(list,ms){setTimeout(function(){if(window.__ohTr!==api)return;var b=[];list.forEach(function(i){var u=units[i];if(u){u.again=(u.again||0)+1;if(u.again<=4)b.push({i:i,t:u.t});}});if(b.length)OharaTr.texts(JSON.stringify(b));},ms);},
+restore:function(){units.forEach(function(u){u.n.forEach(function(x){if(x.__orig!=null){x.nodeValue=x.__orig;x.__orig=null;}x.__oh=0;x.__ohF=0;x.__ohC=0;});});units=[];clearInterval(window.__ohTrT);window.__ohTr=null;}};
+window.__ohTr=api;
 scan();window.__ohTrT=setInterval(scan,2500);
 })();"""
 
@@ -104,6 +127,20 @@ scan();window.__ohTrT=setInterval(scan,2500);
         web.evaluateJavascript("if(window.__ohTr)window.__ohTr.set($i,${JSONObject.quote(fr)})", null)
     }
 
+    /** La traduction de ce morceau a échoué : la page le retentera plus tard. */
+    private fun fail(web: WebView, i: Int) = web.post {
+        web.evaluateJavascript("if(window.__ohTr)window.__ohTr.fail($i,8000)", null)
+    }
+
+    /** Ces morceaux ont été traduits par le téléphone faute de mieux : la page les renverra quand le service en ligne répondra de nouveau. */
+    private fun retryLater(web: WebView, list: List<Int>) {
+        val ms = maxOf(Translate.onlineRetryIn + 3000L, 25000L)
+        web.post { web.evaluateJavascript("if(window.__ohTr)window.__ohTr.again([${list.joinToString(",")}],$ms)", null) }
+    }
+
+    @Volatile private var noticeAt = 0L
+    @Volatile private var failToastGen = -1
+
     private fun work(json: String, web: WebView) {
         val gen = generation
         val items = runCatching { JSONArray(json) }.getOrNull() ?: return
@@ -126,15 +163,47 @@ scan();window.__ohTrT=setInterval(scan,2500);
                         cur += o; size += o.optString("t").length
                     }
                     if (cur.isNotEmpty()) groups += cur
+                    val done = java.util.concurrent.atomic.AtomicInteger(0)
+                    val fellBack = java.util.concurrent.atomic.AtomicInteger(0)
+                    val failed = java.util.concurrent.atomic.AtomicReference<Exception?>(null)
                     suspend fun doGroup(g: List<JSONObject>) {
                         if (gen != generation || !Translate.enabled) return
                         val src = g.map { it.optString("t") }
-                        Translate.texts(src).forEachIndexed { k, fr -> synchronized(cache) { cache[sig + "\u0000" + src[k]] = fr }; show(web, g[k].optInt("i"), fr) }
+                        val res = try {
+                            Translate.textsEx(src)
+                        } catch (e: kotlinx.coroutines.CancellationException) {
+                            throw e
+                        } catch (e: Exception) {
+                            // ce paquet seulement : le reste de la page continue, et ces morceaux seront retentés
+                            failed.set(e)
+                            g.forEach { fail(web, it.optInt("i")) }
+                            return
+                        }
+                        val again = ArrayList<Int>()
+                        res.forEachIndexed { k, r ->
+                            val i = g[k].optInt("i")
+                            if (r.text.isBlank()) { fail(web, i); return@forEachIndexed }
+                            if (r.fallback) again += i else synchronized(cache) { cache[sig + "\u0000" + src[k]] = r.text }
+                            show(web, i, r.text)
+                        }
+                        if (again.isNotEmpty()) { fellBack.addAndGet(again.size); retryLater(web, again) }
+                        val n = done.addAndGet(g.size)
+                        if (gen == generation) status = "Traduction de la page… ($n/${todo.size})"
                     }
                     groups.firstOrNull()?.let { doGroup(it) }
                     if (Translate.online) kotlinx.coroutines.coroutineScope {
                         groups.drop(1).map { g -> launch { doGroup(g) } }
                     } else groups.drop(1).forEach { doGroup(it) }
+                    val now = System.currentTimeMillis()
+                    if (gen == generation && failed.get() != null && failToastGen != gen) {
+                        failToastGen = gen
+                        Toast.show("Traduction interrompue : ${failed.get()?.message ?: "pas de connexion"}. Nouvel essai automatique.")
+                    } else if (gen == generation && fellBack.get() > 0 && now - noticeAt > 600_000L) {
+                        noticeAt = now
+                        Toast.show("Service de traduction en ligne indisponible : le modèle du téléphone prend le relais (qualité moindre). Les paragraphes seront refaits dès que le service répond.")
+                    }
+                } catch (e: kotlinx.coroutines.CancellationException) {
+                    throw e
                 } catch (e: Exception) {
                     Toast.show("Traduction impossible : ${e.message ?: "pas de connexion pour télécharger le modèle"}.")
                 } finally {
