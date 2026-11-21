@@ -587,6 +587,18 @@ private fun TranslationSection() {
     Text(if (online) "Hors connexion, le modèle du téléphone (environ 30 Mo, téléchargé une seule fois) prend le relais."
         else "Tout reste sur le téléphone : rien n'est envoyé, mais la traduction est plus littérale et plus lente.",
         Modifier.padding(horizontal = 16.dp, vertical = 8.dp), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    var slang by remember { mutableStateOf(com.thousandlabs.ohara.translate.Slang.enabled) }
+    SwitchRow("Comprendre l'argot et le langage d'internet",
+        "« lol », « no cap », « sus », « skill issue », « OOC », « A/N »… sont remplacés par leur sens avant la traduction, au lieu d'être traduits mot à mot. Coupez-le si vous préférez une traduction brute.", slang) {
+        slang = it; com.thousandlabs.ohara.translate.Slang.enabled = it; BrowserHolder.retranslateOpenTab()
+    }
+    if (online && Tr.onlineRetryIn > 0) {
+        Text("Le service en ligne est en pause (nouvel essai dans environ ${(Tr.onlineRetryIn / 1000 + 59) / 60} min) : le téléphone traduit en attendant, puis tout reprend en ligne tout seul.",
+            Modifier.padding(horizontal = 16.dp, vertical = 8.dp), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+    }
+    TextButton(onClick = { Tr.clearSaved(); BrowserHolder.retranslateOpenTab(); Toast.show("Traductions gardées effacées.") }, modifier = Modifier.padding(horizontal = 8.dp)) {
+        Text("Effacer les traductions gardées")
+    }
     Text("Dans les deux cas, les noms protégés restent tels quels, la typographie est mise à la française (guillemets « », espaces avant ! ? : ;) " +
         "et chaque paragraphe traduit est gardé : un chapitre déjà lu se réaffiche aussitôt.",
         Modifier.padding(horizontal = 16.dp, vertical = 4.dp), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)

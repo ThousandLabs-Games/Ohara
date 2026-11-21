@@ -256,7 +256,24 @@ object Names {
         "(?:[A-Z][a-z']+:? )+no Jutsu"
     ))
 
-    val FANDOMS = listOf(ONE_PIECE, NARUTO)
+    val MHA = Fandom("mha", "My Hero Academia", listOf(
+        "Midoriya Izuku", "Izuku Midoriya", "Izuku", "Midoriya", "Deku", "Bakugo Katsuki", "Katsuki Bakugo", "Katsuki", "Bakugo", "Bakugou",
+        "Todoroki Shoto", "Shoto Todoroki", "Shoto", "Todoroki", "Uraraka Ochaco", "Ochaco Uraraka", "Ochaco", "Uraraka", "Iida Tenya", "Tenya Iida",
+        "Tenya", "Iida", "Ingenium", "All Might", "Yagi Toshinori", "Toshinori Yagi", "Toshinori", "Eraser Head", "Aizawa Shota", "Shota Aizawa", "Aizawa",
+        "Present Mic", "Yamada Hizashi", "Cementoss", "Recovery Girl", "Principal Nezu", "Gran Torino", "Sir Nighteye", "Nighteye", "Mirko", "Best Jeanist",
+        "Kirishima Eijiro", "Eijiro Kirishima", "Eijiro", "Kirishima", "Yaoyorozu Momo", "Momo Yaoyorozu", "Yaoyorozu", "Jiro Kyoka", "Kyoka Jiro",
+        "Kaminari Denki", "Denki Kaminari", "Kaminari", "Ashido Mina", "Mina Ashido", "Asui Tsuyu", "Tsuyu Asui", "Tsuyu", "Ojiro Mashirao", "Sero Hanta",
+        "Hanta Sero", "Tokoyami Fumikage", "Fumikage Tokoyami", "Tokoyami", "Dark Shadow", "Koda Koji", "Sato Rikido", "Aoyama Yuga", "Yuga Aoyama",
+        "Mineta Minoru", "Minoru Mineta", "Mineta", "Hagakure Toru", "Toru Hagakure", "Hagakure", "Shoji Mezo", "Mezo Shoji", "Togata Mirio", "Mirio Togata",
+        "Mirio", "Hado Nejire", "Nejire Hado", "Amajiki Tamaki", "Tamaki Amajiki", "Shigaraki Tomura", "Tomura Shigaraki", "Shigaraki", "All For One",
+        "One For All", "Himiko Toga", "Toga Himiko", "Dabi", "Chisaki Kai", "Kurogiri", "Stain the Hero Killer", "Hero Killer", "Endeavor", "Enji Todoroki",
+        "Todoroki Enji", "Fuyumi", "Natsuo", "Rei Todoroki", "Hawks", "Keigo Takami", "Tokoyami", "Shinso Hitoshi", "Hitoshi Shinso", "Shinso",
+        "Monoma Neito", "Neito Monoma", "Monoma", "Kendo Itsuka", "Itsuka Kendo", "Bakugo Mitsuki", "Inko", "Midoriya Inko", "Inko Midoriya",
+        "Yuei", "U.A. High School", "U.A.", "Musutafu", "Kamino", "Plus Ultra", "Class 1-A", "Class 1-B", "League of Villains", "Shie Hassaikai",
+        "Hassaikai", "Meta Liberation Army", "Paranormal Liberation Front"
+    ))
+
+    val FANDOMS = listOf(ONE_PIECE, NARUTO, MHA)
 
     // ---------- Vos noms ----------
 
@@ -294,18 +311,20 @@ object Names {
 
     /** Liste active, pour savoir si les traductions déjà faites sont encore valables. */
     fun active(): List<String> {
-        if (!enabled) return emptyList()
         val all = LinkedHashSet<String>()
-        FANDOMS.filter { it.enabled }.forEach { all += it.names }
-        all += userNames
+        if (enabled) {
+            FANDOMS.filter { it.enabled }.forEach { all += it.names }
+            all += userNames
+        }
+        if (Slang.enabled) all += Slang.KEEP
         return all.toList()
     }
 
     /** Termes remplacés par leur équivalent français (vide si l'option est coupée). */
     fun activeTerms(): Map<String, String> {
-        if (!enabled || !termsEnabled) return emptyMap()
         val m = LinkedHashMap<String, String>()
-        FANDOMS.filter { it.enabled }.forEach { m.putAll(it.terms) }
+        if (enabled && termsEnabled) FANDOMS.filter { it.enabled }.forEach { m.putAll(it.terms) }
+        if (Slang.enabled) m.putAll(Slang.TERMS)
         return m
     }
 

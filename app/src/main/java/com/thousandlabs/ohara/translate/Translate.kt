@@ -17,8 +17,61 @@ import org.json.JSONObject
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Element
 import java.io.File
+import java.security.MessageDigest
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
+
+/**
+ * Traductions gardées sur le téléphone, d'une session à l'autre : un chapitre déjà traduit (même seulement en partie)
+ * se réaffiche tout de suite, sans réseau et sans nouvelle demande. Au plus [MAX] paragraphes, les plus anciens sortent d'abord.
+ */
+internal object DiskMemo {
+    private const val MAX = 9000
+    private val map = object : LinkedHashMap<String, String>(1024, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, String>?) = size > MAX
+    }
+    private var loaded = false
+    private var dirty = false
+    private var lastFlush = 0L
+
+    private fun file() = File(Library.dataDir(), "traductions/memo.tsv").apply { parentFile?.mkdirs() }
+
+    private fun key(k: String): String =
+        MessageDigest.getInstance("SHA-1").digest(k.toByteArray(Charsets.UTF_8)).joinToString("") { "%02x".format(it) }.substring(0, 24)
+
+    @Synchronized private fun load() {
+        if (loaded) return
+        loaded = true
+        runCatching {
+            val f = file()
+            if (f.exists()) f.forEachLine { l -> val i = l.indexOf('\t'); if (i > 0) map[l.substring(0, i)] = l.substring(i + 1) }
+        }
+    }
+
+    @Synchronized fun get(k: String): String? { load(); return map[key(k)] }
+
+    @Synchronized fun put(k: String, v: String) {
+        if (v.isBlank() || '\n' in v || '\t' in v) return
+        load(); map[key(k)] = v; dirty = true
+    }
+
+    /** Écrit le fichier, au plus toutes les quelques secondes (écriture complète puis remplacement : jamais de fichier à moitié écrit). */
+    @Synchronized fun flush(force: Boolean = false) {
+        if (!dirty) return
+        val now = System.currentTimeMillis()
+        if (!force && now - lastFlush < 4000) return
+        runCatching {
+            val f = file(); val tmp = File(f.parentFile, "memo.tsv.tmp")
+            tmp.bufferedWriter().use { w -> for ((k, v) in map) { w.write(k); w.write("\t"); w.write(v); w.write("\n") } }
+            if (!tmp.renameTo(f)) { f.delete(); tmp.renameTo(f) }
+            dirty = false; lastFlush = now
+        }
+    }
+
+    @Synchronized fun clear() { loaded = true; map.clear(); dirty = false; runCatching { file().delete() } }
+
+    @Synchronized fun size(): Int { load(); return map.size }
+}
 
 /**
  * Traduction anglais → français.
@@ -68,6 +121,12 @@ object Translate {
     fun hasCache(ficId: String, ch: Int) = File(dir(ficId), "$ch.json").exists()
 
     fun deleteFor(ficId: String) { dir(ficId).deleteRecursively() }
+
+    /** Efface toutes les traductions gardées (mémoire et téléphone). */
+    fun clearSaved() { synchronized(memo) { memo.clear() }; DiskMemo.clear() }
+
+    /** Nombre de paragraphes traduits gardés sur le téléphone. */
+    fun savedCount(): Int = DiskMemo.size()
 
     private val BLOCKS = setOf("p", "li", "blockquote", "h1", "h2", "h3", "h4", "h5", "td", "th", "center", "div", "dd", "dt", "pre")
 
@@ -153,7 +212,7 @@ object Translate {
         set(v) { Prefs.putBool("tr_online", v); namesChanged() }
 
     /** Les traductions gardées dépendent des noms protégés et du moteur qui les a faites. */
-    fun signature(): String = Names.signature() + if (online) "|g3" else "|m2"
+    fun signature(): String = Names.signature() + (if (online) "|g3" else "|m2") + (if (Slang.enabled) "|a1" else "")
 
     /** Prépare la traduction : rien à faire en ligne, le modèle du téléphone sinon. */
     suspend fun prepare(onProgress: (String) -> Unit = {}) { if (!online) ensureModel(onProgress) }
@@ -241,7 +300,9 @@ object Translate {
      * Traduction de morceaux, avec les noms protégés (personnages, îles, techniques…) gardés tels quels
      * et les termes officiels mis en français. Si le traducteur abîme un repère, ce morceau seulement est retraduit sans protection.
      */
-    private suspend fun translatePieces(src: List<String>): List<Out> {
+    private suspend fun translatePieces(raw: List<String>): List<Out> {
+        // argot, mèmes et langage d'internet remplacés par leur sens courant (si la fonction est active)
+        val src = raw.map { Slang.rewrite(it) }
         val word = online && Online.available
         val prot = src.map { Names.protect(it, word) }
         val res = arrayOfNulls<Out>(src.size)
@@ -295,8 +356,18 @@ object Translate {
         val miss = ArrayList<Int>()
         list.forEachIndexed { i, s -> synchronized(memo) { memo[sig + "\u0000" + s] }?.let { out[i] = Out(it, false) } ?: miss.add(i) }
         if (miss.isNotEmpty()) {
-            val r = rawMany(miss.map { list[it] })
-            synchronized(memo) { miss.forEachIndexed { k, i -> out[i] = r[k]; if (!r[k].fallback) memo[sig + "\u0000" + list[i]] = r[k].text } }
+            // gardés sur le téléphone depuis une lecture précédente ?
+            val disk = withContext(Dispatchers.IO) { miss.map { DiskMemo.get(sig + "\u0000" + list[it]) } }
+            val todo = ArrayList<Int>()
+            miss.forEachIndexed { k, i -> val d = disk[k]; if (d != null) { out[i] = Out(d, false); synchronized(memo) { memo[sig + "\u0000" + list[i]] = d } } else todo.add(i) }
+            if (todo.isNotEmpty()) {
+                val r = rawMany(todo.map { list[it] })
+                synchronized(memo) { todo.forEachIndexed { k, i -> out[i] = r[k]; if (!r[k].fallback) memo[sig + "\u0000" + list[i]] = r[k].text } }
+                withContext(Dispatchers.IO) {
+                    todo.forEachIndexed { k, i -> if (!r[k].fallback) DiskMemo.put(sig + "\u0000" + list[i], r[k].text) }
+                    DiskMemo.flush()
+                }
+            }
         }
         return out.map { it ?: Out("", false) }
     }
