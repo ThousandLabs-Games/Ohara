@@ -18,6 +18,56 @@ object Slang {
         get() = Prefs.getBool("tr_slang", true)
         set(v) { Prefs.putBool("tr_slang", v) }
 
+    /**
+     * Garder l'argot en version originale : les expressions de la liste (« skill issue », « womp womp », « rizz »…) ne sont ni
+     * remplacées par leur sens ni traduites ; elles restent en anglais au milieu de la phrase française.
+     * Interrupteur : Réglages › Traduction en français › « Garder l'argot et les mèmes en version originale ».
+     */
+    var keepOriginal: Boolean
+        get() = Prefs.getBool("tr_slang_vo", false)
+        set(v) { Prefs.putBool("tr_slang_vo", v) }
+
+    /** Expressions gardées telles quelles quand « version originale » est activé. En minuscules : reconnues avec ou sans majuscule. */
+    val VO: List<String> = listOf(
+        "skill issue", "skill diff", "womp womp", "womp womp womp", "no cap", "capping", "sus", "sussy", "rizz", "rizzed up", "rizzler",
+        "touch grass", "bruh", "goated", "GOAT", "copium", "hopium", "sheesh", "yeet", "yeeted", "yeeting", "deadass", "lowkey", "highkey",
+        "fr fr", "bussin", "simp", "simping", "vibe check", "main character energy", "git gud", "get gud", "gg", "ez", "rekt", "pwned",
+        "noob", "noobs", "poggers", "pog", "kekw", "oof", "yikes", "welp", "ayo", "L + ratio", "glow up", "glow-up", "big brain",
+        "galaxy brain", "sigma", "mewing", "aura farming", "lol", "lmao", "lmfao", "rofl", "omg", "wtf", "smh", "ngl", "tbh", "fml", "yolo"
+    )
+
+    /** Vos expressions, ajoutées dans les réglages. */
+    val userVO: List<String> get() = Prefs.getList("slang_vo_user")
+
+    fun addUserVO(raw: String): String? {
+        val n = raw.replace(Regex("\\s+"), " ").trim().trim('"', '«', '»', '.', ',', '!', '?')
+        if (n.isEmpty() || n.length > 60 || !n.any { it.isLetter() }) return null
+        if (userVO.any { it.equals(n, true) }) return n
+        Prefs.putList("slang_vo_user", (userVO + n).sortedBy { it.lowercase() })
+        return n
+    }
+
+    fun removeUserVO(n: String) { Prefs.putList("slang_vo_user", userVO - n) }
+
+    /** Liste à protéger pendant la traduction (vide si l'option est coupée). */
+    fun voList(): List<String> = if (!keepOriginal) emptyList() else (VO + userVO).distinct()
+
+    @Volatile private var voCache: Pair<List<String>, Regex?> = emptyList<String>() to null
+
+    /** Repère les expressions à garder, pour que les règles de sens ne les touchent pas. */
+    private fun voRegex(): Regex? {
+        val l = voList()
+        voCache.let { if (it.first == l) return it.second }
+        val alts = l.sortedByDescending { it.length }.map { e ->
+            // la dernière lettre peut être étirée (« bruhhh », « oooof »)
+            val body = Regex.escape(e) + (if (e.last().isLetter()) Regex.escape(e.last().toString()) + "*" else "")
+            if (e.any { it.isUpperCase() }) body else "(?i:$body)"
+        }
+        val rx = if (alts.isEmpty()) null else Regex(BEFORE + "(?:" + alts.joinToString("|") + ")" + AFTER)
+        voCache = l to rx
+        return rx
+    }
+
     /** ci : sans tenir compte de la casse ; cs : casse respectée ; ac : sigle en majuscules (majuscule au résultat seulement en début de phrase). */
     private class Rule(val rx: Regex, val to: String, val acronym: Boolean)
 
@@ -126,6 +176,7 @@ object Slang {
         "cliffhanger", "slow burn", "crackfic", "fanfic", "fanfics", "fanfiction", "uwu", "owo", "UwU", "OwO", "NPC", "NPCs"
     )
 
+    private val KEPT = Regex("\uE000(\\d+)\uE001")
     private val STRETCH = Regex("(\\p{L})\\1{2,}", RegexOption.IGNORE_CASE)
     private val WORD = Regex("\\p{L}+")
 
@@ -145,7 +196,9 @@ object Slang {
     /** Le texte avec l'argot remplacé par son sens courant ; inchangé si la fonction est coupée. */
     fun rewrite(s: String): String {
         if (!enabled || s.length < 2) return s
-        var t = s
+        // expressions gardées en version originale : mises de côté pendant que les règles s'appliquent
+        val kept = ArrayList<String>()
+        var t = voRegex()?.replace(s) { m -> kept += m.value; "\uE000" + (kept.size - 1) + "\uE001" } ?: s
         for (r in RULES) {
             if (!r.rx.containsMatchIn(t)) continue
             val cur = t
@@ -155,6 +208,7 @@ object Slang {
             }
         }
         if (STRETCH.containsMatchIn(t)) t = WORD.replace(t) { unstretch(it.value) }
+        if (kept.isNotEmpty()) t = KEPT.replace(t) { m -> kept.getOrNull(m.groupValues[1].toInt()) ?: m.value }
         return t
     }
 }

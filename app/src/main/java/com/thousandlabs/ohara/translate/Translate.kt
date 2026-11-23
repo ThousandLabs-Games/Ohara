@@ -212,7 +212,7 @@ object Translate {
         set(v) { Prefs.putBool("tr_online", v); namesChanged() }
 
     /** Les traductions gardées dépendent des noms protégés et du moteur qui les a faites. */
-    fun signature(): String = Names.signature() + (if (online) "|g3" else "|m2") + (if (Slang.enabled) "|a1" else "")
+    fun signature(): String = Names.signature() + (if (online) "|g3" else "|m2") + (if (Slang.enabled) "|a1" else "") + (if (Slang.keepOriginal) "|vo1" else "")
 
     /** Prépare la traduction : rien à faire en ligne, le modèle du téléphone sinon. */
     suspend fun prepare(onProgress: (String) -> Unit = {}) { if (!online) ensureModel(onProgress) }

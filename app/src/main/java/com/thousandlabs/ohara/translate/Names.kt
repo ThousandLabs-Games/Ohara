@@ -317,6 +317,7 @@ object Names {
             all += userNames
         }
         if (Slang.enabled) all += Slang.KEEP
+        all += Slang.voList()
         return all.toList()
     }
 

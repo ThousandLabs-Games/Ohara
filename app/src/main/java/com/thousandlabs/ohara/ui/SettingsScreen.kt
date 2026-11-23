@@ -592,6 +592,7 @@ private fun TranslationSection() {
         "« lol », « no cap », « sus », « skill issue », « OOC », « A/N »… sont remplacés par leur sens avant la traduction, au lieu d'être traduits mot à mot. Coupez-le si vous préférez une traduction brute.", slang) {
         slang = it; com.thousandlabs.ohara.translate.Slang.enabled = it; BrowserHolder.retranslateOpenTab()
     }
+    SlangKeepBlock()
     if (online && Tr.onlineRetryIn > 0) {
         Text("Le service en ligne est en pause (nouvel essai dans environ ${(Tr.onlineRetryIn / 1000 + 59) / 60} min) : le téléphone traduit en attendant, puis tout reprend en ligne tout seul.",
             Modifier.padding(horizontal = 16.dp, vertical = 8.dp), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
@@ -602,6 +603,41 @@ private fun TranslationSection() {
     Text("Dans les deux cas, les noms protégés restent tels quels, la typographie est mise à la française (guillemets « », espaces avant ! ? : ;) " +
         "et chaque paragraphe traduit est gardé : un chapitre déjà lu se réaffiche aussitôt.",
         Modifier.padding(horizontal = 16.dp, vertical = 4.dp), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+}
+
+/** « Garder l'argot et les mèmes en version originale » : interrupteur, liste intégrée et vos expressions. */
+@Composable
+private fun SlangKeepBlock() {
+    val sl = com.thousandlabs.ohara.translate.Slang
+    var keep by remember { mutableStateOf(sl.keepOriginal) }
+    var entry by remember { mutableStateOf("") }
+    var mine by remember { mutableStateOf(sl.userVO) }
+    var showAll by remember { mutableStateOf(false) }
+    SwitchRow("Garder l'argot et les mèmes en version originale",
+        "« skill issue », « womp womp », « rizz », « no cap », « bruh »… restent en anglais dans la phrase française, sans équivalent cherché. Seules ces expressions sont concernées : le reste est traduit normalement.", keep) {
+        keep = it; sl.keepOriginal = it; BrowserHolder.retranslateOpenTab()
+    }
+    if (!keep) return
+    TextButton(onClick = { showAll = !showAll }, modifier = Modifier.padding(horizontal = 8.dp)) {
+        Text(if (showAll) "Masquer la liste intégrée" else "Voir la liste intégrée (${sl.VO.size} expressions)")
+    }
+    if (showAll) Text(sl.VO.joinToString(" · "), Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    Row(Modifier.padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+        OutlinedTextField(entry, { entry = it }, label = { Text("Ajouter une expression") }, singleLine = true, modifier = Modifier.weight(1f))
+        TextButton(onClick = {
+            val n = sl.addUserVO(entry)
+            if (n != null) { mine = sl.userVO; Toast.show("« $n » restera en version originale."); BrowserHolder.retranslateOpenTab() }
+            entry = ""
+        }, enabled = entry.isNotBlank()) { Text("Ajouter") }
+    }
+    Text("Écrite en minuscules, l'expression est reconnue avec ou sans majuscule.", Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    mine.forEach { n ->
+        SettingRow(n, null) {
+            IconButton(onClick = { sl.removeUserVO(n); mine = sl.userVO; BrowserHolder.retranslateOpenTab() }) { Icon(Icons.Outlined.Delete, "Retirer") }
+        }
+    }
 }
 
 @OptIn(ExperimentalLayoutApi::class)
