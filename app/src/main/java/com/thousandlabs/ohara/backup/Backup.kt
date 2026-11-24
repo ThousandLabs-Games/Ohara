@@ -1,5 +1,6 @@
 package com.thousandlabs.ohara.backup
 
+import com.thousandlabs.ohara.data.ChapterInfo
 import com.thousandlabs.ohara.data.Fic
 import com.thousandlabs.ohara.data.Library
 import com.thousandlabs.ohara.data.Prefs
@@ -87,6 +88,17 @@ object Backup {
     }
 
     /**
+     * Fichier partiel : garde les chapitres déjà connus avant l'index [from], puis ajoute les nouveaux.
+     * Un chapitre manquant avant [from] reçoit un titre provisoire, pour que les index restent alignés sur les fichiers.
+     */
+    private fun appendChapters(base: Fic, before: List<ChapterInfo>, added: List<ChapterInfo>, from: Int): Fic {
+        val root = base.url.substringBeforeLast('/')
+        val head = (0 until from).map { i -> before.getOrNull(i) ?: ChapterInfo("Chapitre ${i + 1}", "$root/$i") }
+        val all = head + added
+        return base.copy(chapters = all, chapterCount = all.size, words = all.sumOf { it.words.toLong() })
+    }
+
+    /**
      * Restauration.
      * @param replace true : la bibliothèque actuelle est remplacée ; false : les fics absentes sont ajoutées
      *   et, pour celles déjà présentes, on garde la progression la plus avancée.
@@ -97,6 +109,8 @@ object Backup {
         var journal: JSONObject? = null
         var prefs: JSONObject? = null
         val extras = HashMap<String, String>()
+        // fics importées livrées par morceaux : « from » = index du premier chapitre contenu dans le fichier
+        val starts = HashMap<String, Int>()
         val tmp = File(Library.dataDir(), "restauration").apply { deleteRecursively(); mkdirs() }
         var chapters = 0
         ZipInputStream(input.buffered()).use { z ->
@@ -109,6 +123,10 @@ object Backup {
                     name == "fics.json" -> {
                         val a = JSONArray(z.readBytes().toString(Charsets.UTF_8))
                         fics = List(a.length()) { Fic.fromJson(a.getJSONObject(it)) }
+                        for (i in 0 until a.length()) a.getJSONObject(i).let { o ->
+                            val from = o.optInt("from", 0)
+                            if (from > 0) starts[o.optString("id")] = from
+                        }
                     }
                     name == "journal.json" -> journal = JSONObject(z.readBytes().toString(Charsets.UTF_8))
                     name == "reglages.json" -> prefs = JSONObject(z.readBytes().toString(Charsets.UTF_8))
@@ -136,13 +154,22 @@ object Backup {
             journal?.let { ReadingLog.replace(it) }
             prefs?.let { Prefs.importAll(prefsFromJson(it)) }
         } else {
-            val absent = list.filter { !Library.contains(it.id) }
+            val absentIds = list.filter { !Library.contains(it.id) }.map { it.id }.toSet()
+            val absent = list.filter { it.id in absentIds }.map { f ->
+                val from = starts[f.id] ?: 0
+                if (from > 0) appendChapters(f, emptyList(), f.chapters, from) else f
+            }
             if (absent.isNotEmpty()) Library.replaceAll(Library.fics.value + absent)
             for (f in list) {
-                if (f in absent) continue
+                if (f.id in absentIds) continue
                 Library.update(f.id) { cur ->
-                    // fic importée : la nouvelle version du fichier apporte les nouveaux chapitres et la fiche à jour
-                    val it = if (f.site == com.thousandlabs.ohara.data.Site.LOCAL) cur.mergeSiteData(f) else cur
+                    // fic importée : la nouvelle version du fichier apporte les nouveaux chapitres et la fiche à jour ;
+                    // un fichier partiel (« from ») ajoute ses chapitres à la suite de ceux déjà présents
+                    val from = starts[f.id] ?: 0
+                    val it = if (f.site == com.thousandlabs.ohara.data.Site.LOCAL) {
+                        if (from > 0) appendChapters(cur.mergeSiteData(f), cur.chapters, f.chapters, from)
+                        else cur.mergeSiteData(f)
+                    } else cur
                     if (f.maxChapterRead > it.maxChapterRead) it.copy(
                         progressChapter = f.progressChapter, progressPos = f.progressPos, maxChapterRead = f.maxChapterRead,
                         shelves = it.shelves + f.shelves,
