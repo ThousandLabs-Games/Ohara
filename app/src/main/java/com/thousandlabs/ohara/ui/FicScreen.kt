@@ -251,6 +251,12 @@ fun FicScreen(ficId: String, preview: Fic?) {
                     val rows = buildList {
                         add("Longueur" to "${Fmt.words(fic.words)} · ${Fmt.plural(fic.totalChapters, "chapitre")}")
                         if (inLib != null) add("Sur le téléphone" to "$downloaded/${fic.totalChapters} chapitres" + if (downloaded > 0) "" else " (lecture en ligne)")
+                        if (inLib != null && (inLib.secondsRead >= 60 || inLib.wordsRead > 0)) add("Votre lecture" to listOf(
+                            Stats.hours(inLib.secondsRead), Fmt.words(inLib.wordsRead).replace("?", "0") + " lus",
+                            "chapitre ${(inLib.maxChapterRead + 1).coerceAtLeast(0)}/${fic.totalChapters}").joinToString(" · "))
+                        if (inLib != null) Stats.remaining(inLib)?.let { r ->
+                            add("Reste à lire" to if (r <= 0) "Rien, vous êtes à jour" else "environ ${Stats.hours(r)} à votre vitesse (${Stats.speed()} mots/min)")
+                        }
                         add("Publiée" to Fmt.date(fic.published))
                         add("Mise à jour" to "${Fmt.date(fic.updated)} (${Fmt.relative(fic.updated)})")
                         if (fic.favs > 0 || fic.follows > 0) add("Lecteurs" to listOfNotNull(

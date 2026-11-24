@@ -208,35 +208,42 @@ object Library {
     fun storageBytes(): Long = File(root, "fics").walkTopDown().filter { it.isFile }.sumOf { it.length() }
 }
 
-/** Journal de lecture par jour (mots lus et temps passé), pour les statistiques. */
+/** Journal de lecture par jour (mots lus, temps passé, chapitres lus), pour les statistiques. */
 object ReadingLog {
     private lateinit var file: File
-    private val days = linkedMapOf<String, LongArray>() // "2026-11-17" → [mots, secondes]
+    private val days = linkedMapOf<String, LongArray>() // "2026-11-17" → [mots, secondes, chapitres]
+    private var dirty = 0
+    private var lastSave = 0L
 
-    fun init(root: File) {
-        file = File(root, "journal.json")
-        runCatching {
-            val o = JSONObject(file.readText())
-            for (k in o.keys()) {
-                val a = o.getJSONArray(k)
-                days[k] = longArrayOf(a.optLong(0), a.optLong(1))
-            }
+    private fun parse(o: JSONObject) {
+        for (k in o.keys()) {
+            val a = o.optJSONArray(k) ?: continue
+            days[k] = longArrayOf(a.optLong(0).coerceAtLeast(0), a.optLong(1).coerceAtLeast(0), a.optLong(2).coerceAtLeast(0))
         }
     }
 
-    private fun today(): String {
-        val c = Calendar.getInstance()
-        return "%04d-%02d-%02d".format(c.get(Calendar.YEAR), c.get(Calendar.MONTH) + 1, c.get(Calendar.DAY_OF_MONTH))
+    fun init(root: File) {
+        file = File(root, "journal.json")
+        runCatching { parse(JSONObject(file.readText())) }
     }
 
+    fun dayKey(c: Calendar): String =
+        "%04d-%02d-%02d".format(java.util.Locale.ROOT, c.get(Calendar.YEAR), c.get(Calendar.MONTH) + 1, c.get(Calendar.DAY_OF_MONTH))
+
     @Synchronized
-    fun add(words: Long, seconds: Long) {
-        if (words <= 0 && seconds <= 0) return
-        val k = today()
-        val cur = days.getOrPut(k) { longArrayOf(0, 0) }
-        cur[0] += words; cur[1] += seconds
-        save()
+    fun add(words: Long, seconds: Long, chapters: Long = 0) {
+        if (words <= 0 && seconds <= 0 && chapters <= 0) return
+        val cur = days.getOrPut(dayKey(Calendar.getInstance())) { longArrayOf(0, 0, 0) }
+        cur[0] += words.coerceAtLeast(0); cur[1] += seconds.coerceAtLeast(0); cur[2] += chapters.coerceAtLeast(0)
+        // le temps arrive toutes les quelques secondes : on n'écrit le fichier qu'une fois par minute (ou à chaque chapitre)
+        dirty++
+        val now = System.currentTimeMillis()
+        if (words > 0 || chapters > 0 || now - lastSave > 60_000) save()
     }
+
+    /** Écrit ce qui attend encore (appelé quand Ohara passe en arrière-plan). */
+    @Synchronized
+    fun flush() { if (dirty > 0) save() }
 
     @Synchronized
     fun snapshot(): Map<String, LongArray> = days.mapValues { it.value.clone() }
@@ -244,12 +251,16 @@ object ReadingLog {
     @Synchronized
     fun replace(o: JSONObject) {
         days.clear()
-        for (k in o.keys()) { val a = o.getJSONArray(k); days[k] = longArrayOf(a.optLong(0), a.optLong(1)) }
+        parse(o)
         save()
     }
 
+    /** Remise à zéro du journal (les compteurs de chaque fic restent). */
     @Synchronized
-    fun toJson(): JSONObject = JSONObject().also { o -> days.forEach { (k, v) -> o.put(k, JSONArray().put(v[0]).put(v[1])) } }
+    fun clear() { days.clear(); save() }
 
-    private fun save() { SafeFile.write(file, toJson().toString()) }
+    @Synchronized
+    fun toJson(): JSONObject = JSONObject().also { o -> days.forEach { (k, v) -> o.put(k, JSONArray().put(v[0]).put(v[1]).put(v[2])) } }
+
+    private fun save() { dirty = 0; lastSave = System.currentTimeMillis(); SafeFile.write(file, toJson().toString()) }
 }

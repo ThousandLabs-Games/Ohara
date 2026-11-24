@@ -563,12 +563,22 @@ hide:function(s){try{document.querySelectorAll(s).forEach(function(x){x.style.se
             @JavascriptInterface fun picked(selector: String, text: String, count: Int, inText: Boolean, full: String) { main.post { picked = Picked(selector, text, count, inText, full) } }
         }, "OharaPick")
         w.addJavascriptInterface(object {
-            @JavascriptInterface fun report(words: Int, fraction: Float, meta: String) {
+            /** L'adresse vient de la page elle-même : elle suit les sites qui changent de chapitre sans recharger (WebNovel). */
+            private fun pageAddress(href: String): String? =
+                href.takeIf { it.startsWith("http") } ?: t.pageUrl
+            @JavascriptInterface fun report(href: String, key: String, words: Int, fraction: Float, moved: Boolean, meta: String) {
                 if (t.private) return
-                val u = t.pageUrl ?: return
-                main.post { if (meta.isNotBlank()) t.meta = meta; ReadTracker.onReport(u, words, fraction, meta) }
+                val u = pageAddress(href) ?: return
+                main.post {
+                    if (meta.isNotBlank()) t.meta = meta
+                    ReadTracker.onReport(u, key, words, fraction, moved, t === tab && !showTabs && Nav.stack.size == 1 && !Locker.locked, meta)
+                }
             }
-            @JavascriptInterface fun chapter(html: String) { if (t.private) return; val u = t.pageUrl ?: return; main.post { ReadTracker.onChapter(u, html) } }
+            @JavascriptInterface fun chapter(href: String, key: String, html: String) {
+                if (t.private) return
+                val u = pageAddress(href) ?: return
+                main.post { ReadTracker.onChapter(u, key, html) }
+            }
         }, "OharaRead")
         w.addJavascriptInterface(object {
             @JavascriptInterface fun failed() { main.post { t.readerMode = false; Toast.show("Pas de texte principal trouvé : le mode lecture ne s'applique pas à cette page.") } }
@@ -666,6 +676,11 @@ hide:function(s){try{document.querySelectorAll(s).forEach(function(x){x.style.se
             override fun doUpdateVisitedHistory(view: WebView, u: String?, isReload: Boolean) {
                 t.canBack = view.canGoBack(); t.canForward = view.canGoForward()
                 if (u != null && u.startsWith("http") && !t.offline) t.url = u
+                // Site qui passe au chapitre suivant sans recharger la page (WebNovel) : le suivi de lecture suit.
+                if (u != null && !t.private && u.startsWith("http")) {
+                    val info = ficInfo(u)
+                    if (PageTools.isChapter(info, u)) view.evaluateJavascript(ReadTracker.script(info!!), null)
+                }
             }
 
             override fun onPageFinished(view: WebView, u: String?) {

@@ -82,6 +82,7 @@ class MainActivity : FragmentActivity() {
 
     override fun onStart() {
         super.onStart()
+        com.thousandlabs.ohara.ui.ReadTracker.foreground = true
         Locker.onStart()
         // si l'appli est verrouillée, l'envoi attend l'empreinte (voir Locker.unlock)
         if (Locker.locked) com.thousandlabs.ohara.ui.ClaudePrep.markVisible() else com.thousandlabs.ohara.ui.ClaudePrep.onVisible(this)
@@ -89,6 +90,8 @@ class MainActivity : FragmentActivity() {
 
     override fun onStop() {
         super.onStop()
+        com.thousandlabs.ohara.ui.ReadTracker.foreground = false
+        com.thousandlabs.ohara.data.ReadingLog.flush()
         Locker.onStop()
         com.thousandlabs.ohara.ui.ClaudePrep.onHidden()
         AdBlocker.flushCount()

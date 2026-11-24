@@ -55,14 +55,6 @@ import com.thousandlabs.ohara.discover.JunkFilter
 import com.thousandlabs.ohara.privacy.AdBlocker
 import java.util.Calendar
 
-/** Vitesse de lecture mesurée (mots par minute), 230 par défaut tant qu'il n'y a pas assez de mesures. */
-fun readingSpeed(): Int {
-    val days = ReadingLog.snapshot().values
-    val words = days.sumOf { it[0] }
-    val secs = days.sumOf { it[1] }
-    return if (secs > 900 && words > 2000) (words * 60 / secs).toInt().coerceIn(120, 700) else 230
-}
-
 // ---------- Dossier « Masquées » ----------
 
 @Composable
@@ -111,89 +103,6 @@ fun HiddenScreen() {
     }
 }
 
-// ---------- Statistiques ----------
-
-@Composable
-fun StatsScreen() {
-    val fics by Library.fics.collectAsState()
-    val days = remember { ReadingLog.snapshot() }
-    val cal = Calendar.getInstance()
-    fun key(c: Calendar) = "%04d-%02d-%02d".format(c.get(Calendar.YEAR), c.get(Calendar.MONTH) + 1, c.get(Calendar.DAY_OF_MONTH))
-    val last30 = (29 downTo 0).map { back ->
-        val c = (cal.clone() as Calendar).apply { add(Calendar.DAY_OF_YEAR, -back) }
-        days[key(c)]?.get(1) ?: 0L
-    }
-    var streak = 0
-    run {
-        val c = cal.clone() as Calendar
-        if ((days[key(c)]?.get(1) ?: 0L) == 0L) c.add(Calendar.DAY_OF_YEAR, -1)
-        while ((days[key(c)]?.get(1) ?: 0L) > 0L) { streak++; c.add(Calendar.DAY_OF_YEAR, -1) }
-    }
-    val totalSec = days.values.sumOf { it[1] }
-    val totalWords = days.values.sumOf { it[0] }
-    val downloaded = fics.sumOf { Library.downloadedCount(it.id) }
-    val primary = MaterialTheme.colorScheme.primary
-    val track = MaterialTheme.colorScheme.surfaceVariant
-
-    Scaffold(topBar = { BackTopBar("Statistiques de lecture") }) { pad ->
-        Column(Modifier.fillMaxSize().padding(pad).verticalScroll(rememberScrollState()).padding(bottom = 48.dp)) {
-            Row(Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                StatBox("Temps de lecture", Fmt.duration(totalSec), Modifier.weight(1f))
-                StatBox("Mots lus", Fmt.words(totalWords).removeSuffix(" mots"), Modifier.weight(1f))
-            }
-            Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                StatBox("Jours d'affilée", "$streak", Modifier.weight(1f))
-                StatBox("Vitesse", "${readingSpeed()} mots/min", Modifier.weight(1f))
-            }
-            SectionTitle("30 derniers jours")
-            val max = (last30.maxOrNull() ?: 0L).coerceAtLeast(60L)
-            Canvas(Modifier.fillMaxWidth().height(120.dp).padding(horizontal = 16.dp)) {
-                val w = size.width / 30f
-                last30.forEachIndexed { i, v ->
-                    val h = (v.toFloat() / max) * size.height
-                    drawRoundRect(track, Offset(i * w + w * 0.15f, 0f), Size(w * 0.7f, size.height), CornerRadius(4f, 4f))
-                    if (v > 0) drawRoundRect(primary, Offset(i * w + w * 0.15f, size.height - h), Size(w * 0.7f, h), CornerRadius(4f, 4f))
-                }
-            }
-            Text("Temps de lecture par jour (le plus haut : ${Fmt.duration(max)})", Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
-                style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            SectionTitle("Bibliothèque")
-            SettingRow("Fics", "${fics.size} au total · ${fics.count { Shelves.DONE in it.shelves }} lues · ${fics.count { Shelves.READING in it.shelves }} en cours · ${fics.count { Shelves.ABANDONED in it.shelves }} abandonnées")
-            SettingRow("Chapitres sur le téléphone", "${Fmt.number(downloaded.toLong())} · ${Fmt.bytes(remember { Library.storageBytes() })}")
-            SettingRow("Notes données", fics.filter { it.note >= 0 }.let { l -> if (l.isEmpty()) "Aucune" else "${l.size} · moyenne ${"%.1f".format(l.map { it.note }.average())}/10" })
-            SettingRow("Surlignages", "${fics.sumOf { it.highlights.size }}")
-            SettingRow("Publicités et pisteurs bloqués", Fmt.number(AdBlocker.totalBlocked))
-            val topFandoms = fics.flatMap { f -> f.fandoms.map { it to f.secondsRead.coerceAtLeast(1) } }
-                .groupBy({ it.first }, { it.second }).mapValues { it.value.sum() }.entries.sortedByDescending { it.value }.take(6)
-            if (topFandoms.isNotEmpty()) {
-                SectionTitle("Fandoms les plus lus")
-                topFandoms.forEach { (fd, s) -> SettingRow(fd, if (s > 60) Fmt.duration(s) else "—") }
-            }
-            val topFics = fics.filter { it.secondsRead > 60 }.sortedByDescending { it.secondsRead }.take(5)
-            if (topFics.isNotEmpty()) {
-                SectionTitle("Fics les plus lues")
-                topFics.forEach { f -> SettingRow(f.title, Fmt.duration(f.secondsRead), onClick = { Nav.push(Screen.FicDetail(f.id)) }) }
-            }
-        }
-    }
-    @Suppress("UNUSED_EXPRESSION") track
-}
-
-@Composable
-private fun StatBox(label: String, value: String, modifier: Modifier = Modifier) {
-    Column(modifier.clip(RoundedCornerShape(12.dp)).padding(0.dp)) {
-        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp))
-            .then(Modifier.padding(0.dp))) {
-            androidx.compose.material3.Surface(color = MaterialTheme.colorScheme.surfaceContainerHigh, shape = RoundedCornerShape(12.dp)) {
-                Column(Modifier.fillMaxWidth().padding(14.dp)) {
-                    Text(value, style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.primary)
-                    Text(label, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-            }
-        }
-    }
-}
-
 // ---------- Guide « Comment faire » ----------
 
 private val GUIDE = listOf(
@@ -202,6 +111,7 @@ private val GUIDE = listOf(
     "Onglets privés" to "Menu › « Onglet privé », ou « Privés » dans la liste des onglets. Les barres deviennent sombres. Rien n'est gardé : ni historique, ni lecture comptée pour la bibliothèque, ni page en cache, et ces onglets ne sont pas rouverts au prochain lancement. Leurs cookies sont séparés et effacés quand vous fermez le dernier onglet privé (sur les téléphones dont le composant WebView est trop ancien, les cookies restent communs).",
     "Favoris" to "Menu › « Ajouter aux favoris » : nommez la page et choisissez un dossier, ou créez-en un. Les favoris s'affichent sur la page d'accueil ; menu › « Favoris » pour tous les voir, les chercher, les déplacer d'un dossier à l'autre (crayon) ou les retirer. Supprimer un dossier remet ses favoris dans « Favoris ».",
     "Appui long sur un lien" to "Touchez un lien longuement : ouvrir dans un nouvel onglet, en arrière-plan ou en privé, ajouter la fic à la bibliothèque ou la télécharger sans l'ouvrir, l'ajouter aux favoris, copier ou partager le lien.",
+    "Statistiques de lecture" to "Menu de la bibliothèque › « Statistiques de lecture », ou Réglages. Le temps est compté quand vous lisez un chapitre dans l'onglet affiché : les pauses sans toucher l'écran comptent, mais plus rien après 2 min 30 sans faire défiler, appli en arrière-plan ou écran éteint. Un chapitre compte comme lu à 60 % parcourus, une seule fois. Choisissez la période (7 jours, 30 jours, 12 mois) et la mesure (temps, mots, chapitres) ; touchez une barre pour voir son détail. Les onglets privés ne comptent jamais. La corbeille en haut remet le journal à zéro sans toucher aux fics.",
     "Lire en plein écran" to "Quand vous descendez dans une page, les barres du haut et du bas disparaissent pour laisser tout l'écran au chapitre ; remontez un peu pour les faire revenir. Réglages › Lecture › « Cacher les barres en lisant » pour désactiver.",
     "Passer au chapitre suivant en glissant" to "Arrivé tout en bas d'un chapitre, continuez à faire défiler vers le bas et gardez le doigt sur l'écran : une jauge se remplit en une seconde, puis le chapitre suivant s'ouvre. Tout en haut, continuez vers le haut pour revenir au chapitre précédent. Lâchez avant la fin de la jauge pour annuler. Fonctionne sur FanFiction.net, SpaceBattles, WebNovel et dans les chapitres téléchargés ; Réglages › Lecture pour le couper.",
     "Mode lecture" to "Menu › « Mode lecture » : la page ne garde que le texte du chapitre, avec des boutons Précédent et Suivant. Menu › « Affichage de lecture » pour choisir le thème (clair, sépia, sombre, noir), la police, la taille, l'interligne, les marges et le texte justifié. Il peut s'appliquer à tous les chapitres d'office (Réglages › Lecture). La traduction et le masquage continuent de fonctionner.",
@@ -258,6 +168,16 @@ fun GuideScreen() {
 // ---------- Nouveautés de l'appli ----------
 
 private val VERSIONS = listOf(
+    "Statistiques corrigées — 24 novembre 2026" to listOf(
+        "Le temps de lecture est enfin juste : avant, une pause de lecture sans toucher l'écran remettait le compteur à zéro, et seule une petite partie du temps était comptée. Désormais tout le temps passé sur un chapitre compte, pauses comprises, et le compteur s'arrête après 2 min 30 sans faire défiler, appli en arrière-plan, écran éteint, appli verrouillée ou autre écran d'Ohara ouvert.",
+        "WebNovel : chaque chapitre enchaîné sur la même page est compté (mots, temps, progression). Avant, seul le premier l'était.",
+        "Mode Reader de SpaceBattles : chaque chapitre de la page compte à part et la progression suit le chapitre affiché.",
+        "Les mots lus sont ceux du texte d'origine, même quand la page est affichée traduite ; une relecture ne compte plus deux fois, même après avoir fermé l'appli.",
+        "Le temps passé sur une fic avant son entrée dans la bibliothèque lui est maintenant attribué.",
+        "Nouvel écran de statistiques : chapitres lus, record de jours d'affilée, graphique sur 7 jours, 30 jours ou 12 mois en temps, mots ou chapitres (touchez une barre pour son détail), résumé du jour, de la semaine et du mois, meilleur jour, fandoms et fics les plus lus.",
+        "La vitesse de lecture n'utilise que les mesures faites avec le nouveau suivi. Bouton en haut à droite pour remettre le journal à zéro.",
+        "Fiche d'une fic : temps passé, mots lus et temps restant estimé à votre vitesse."
+    ),
     "Argot en version originale — 23 novembre 2026" to listOf(
         "Nouvel interrupteur dans Réglages › Traduction en français : « Garder l'argot et les mèmes en version originale ». « Skill issue », « womp womp », « rizz », « no cap », « bruh »… restent en anglais dans la phrase française, sans équivalent cherché.",
         "Seules les expressions sont concernées : le reste de la phrase est traduit normalement.",

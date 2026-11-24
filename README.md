@@ -35,6 +35,10 @@ Ohara réunit au même endroit la recherche, la lecture, le téléchargement et 
 - Chapitres lus gardés sur le téléphone ; téléchargement complet au choix ; « Téléchargements » affiche les chapitres comme des pages, sans connexion.
 - « Envoyer à Claude » en un geste (fichiers et consigne choisie vers l'appli Claude), avec compteur, annulation et préparation qui continue en arrière-plan (notification « Prêt à envoyer à Claude ») ; exports EPUB, TXT et Pack Claude.
 
+### Statistiques
+- Temps de lecture juste (pauses de lecture comprises, arrêt après 2 min 30 sans geste ou appli en arrière-plan), mots du texte d'origine, chapitres lus, chaque chapitre compté une seule fois, WebNovel et mode Reader de SpaceBattles compris.
+- Graphique 7 jours, 30 jours ou 12 mois (temps, mots, chapitres), résumé du jour, de la semaine et du mois, jours d'affilée et record, meilleur jour, fandoms et fics les plus lus, temps restant estimé sur la fiche de chaque fic.
+
 ### Découverte
 - Recherche avancée multi-sites, score « Prometteuse » aux critères réglables, « Pour vous », « Nouveautés », « Trouver une fic similaire ».
 - Filtre anti-déchets toujours actif (harem, fics « react », fics chinoises récentes, System et transmigration de mauvaise qualité), dossier « Masquées ».
