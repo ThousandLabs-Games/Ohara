@@ -213,7 +213,7 @@ setTimeout(tick,1200);setInterval(tick,5000);
         val lib = Library.get(id)
         val secs = readingSeconds(moved, active)
         if (secs > 0) {
-            ReadingLog.add(0, secs)
+            ReadingLog.add(0, secs, ficId = id)
             if (lib != null) Library.update(id) { it.copy(secondsRead = it.secondsRead + secs) }
             else synchronized(watches) { watches[id]?.let { it.seconds += secs } }
         }
@@ -222,7 +222,7 @@ setTimeout(tick,1200);setInterval(tick,5000);
             // mots lus : un chapitre nouveau (pas une relecture) compte une fois
             val idx0 = chapterIndex(info, lib)
             if (fraction >= 0.6f && Counted.add("$id|$key") && (idx0 == null || idx0 > lib.maxChapterRead)) {
-                ReadingLog.add(words.toLong(), 0, chapters = 1)
+                ReadingLog.add(words.toLong(), 0, chapters = 1, ficId = id)
                 Library.update(id) { it.copy(wordsRead = it.wordsRead + words) }
             }
             if (now - (lastSaveAt[id] ?: 0L) < 3000 && fraction < 0.6f) return
@@ -255,7 +255,7 @@ setTimeout(tick,1200);setInterval(tick,5000);
             info.chapterIndex?.let { w.lastIndex = it }
             if (fraction >= 0.6f && w.chapters.add(key)) {
                 w.words += words
-                ReadingLog.add(words.toLong(), 0, chapters = 1)
+                ReadingLog.add(words.toLong(), 0, chapters = 1, ficId = id)
                 save()
             }
             if (w.words >= threshold) {

@@ -205,6 +205,8 @@ object BrowserHolder {
     data class Picked(val selector: String, val text: String, val count: Int, val inText: Boolean, val full: String)
     var picked by mutableStateOf<Picked?>(null)
     var findOpen by mutableStateOf(false)
+    /** Passage à surligner dans la prochaine page ouverte (résultat de « Rechercher dans les chapitres »). */
+    var findSeed by mutableStateOf("")
     /** Lien touché longuement (menu du lien). */
     var linkMenu by mutableStateOf<String?>(null)
     var groupTabs: Boolean get() = Prefs.getBool("tab_groups", true); set(v) = Prefs.putBool("tab_groups", v)
@@ -689,6 +691,11 @@ hide:function(s){try{document.querySelectorAll(s).forEach(function(x){x.style.se
                 cosmeticJs(u).takeIf { it.isNotEmpty() }?.let { view.evaluateJavascript(it, null) }
                 if (u == null || !u.startsWith("http")) return
                 pageScripts(view, u, t)
+                if (findSeed.isNotBlank() && t === tab) {
+                    val q = findSeed
+                    findOpen = true
+                    view.postDelayed({ view.findAllAsync(q); view.postDelayed({ if (findSeed == q) findSeed = "" }, 800) }, 500)
+                }
                 view.postDelayed({ if (t === tab && !showTabs) capture(t) }, 1200)
                 if (!t.offline && !t.private) {
                     History.add(History.Kind.PAGE, view.title.orEmpty(), u)
@@ -1071,7 +1078,7 @@ private fun PickerBar() {
 @Composable
 private fun FindBar(t: Tab) {
     val h = BrowserHolder
-    var q by remember { mutableStateOf("") }
+    var q by remember { mutableStateOf(h.findSeed) }
     val focus = remember { FocusRequester() }
     Surface(color = MaterialTheme.colorScheme.surfaceContainerHigh) {
         Row(Modifier.fillMaxWidth().imePadding().padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -1084,7 +1091,7 @@ private fun FindBar(t: Tab) {
             IconButton(onClick = { t.web?.clearMatches(); h.findOpen = false; h.findInfo = "" }) { Icon(Icons.Outlined.Close, "Fermer") }
         }
     }
-    LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
+    LaunchedEffect(Unit) { if (q.isBlank()) runCatching { focus.requestFocus() } }
 }
 
 @Composable
@@ -1152,6 +1159,8 @@ private fun BrowserMenu(t: Tab, context: Context, onBookmark: () -> Unit, onRead
                 }
                 MenuTile(Icons.Outlined.DesktopWindows, "Version ordinateur", active = t.desktop, enabled = !t.isStart) { onClose(); h.setDesktop(t, !t.desktop) }
                 MenuTile(Icons.Outlined.FindInPage, "Rechercher dans la page", enabled = !t.isStart) { onClose(); h.findOpen = true }
+                MenuTile(Icons.Outlined.Search, "Rechercher dans mes fics") { onClose(); Nav.push(Screen.ChapterSearch(info?.ficId?.takeIf { Library.contains(it) })) }
+                MenuTile(Icons.Outlined.NightsStay, "Filtre de nuit", active = NightFilter.activeNow()) { onClose(); NightFilter.toggle() }
                 MenuTile(Icons.Outlined.TouchApp, "Masquer un élément", enabled = !t.isStart) { onClose(); h.startPicker() }
                 MenuTile(Icons.Outlined.Visibility, "Passages masqués", enabled = !t.isStart) { onClose(); onMasked() }
                 MenuTile(Icons.Outlined.Tune, "Réglages de ce site", enabled = !t.isStart && !t.offline) { onClose(); onSite() }

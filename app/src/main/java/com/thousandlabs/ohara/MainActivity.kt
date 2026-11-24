@@ -47,6 +47,7 @@ class MainActivity : FragmentActivity() {
                 notifPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
             }
             AppUpdater.check(manual = false)
+            AppScope.launch { kotlinx.coroutines.delay(4000); com.thousandlabs.ohara.ui.MonthReport.announce() }
             if (Prefs.checkOnLaunch && Library.fics.value.isNotEmpty()) UpdateChecker.checkAll(applicationContext)
         }
     }

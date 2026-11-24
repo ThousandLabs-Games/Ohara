@@ -28,6 +28,7 @@ import androidx.compose.material.icons.outlined.Block
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Download
+import androidx.compose.material.icons.outlined.FindInPage
 import androidx.compose.material.icons.outlined.DownloadDone
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.FileUpload
@@ -153,6 +154,7 @@ fun FicScreen(ficId: String, preview: Fic?) {
                     }
                     if (inLib == null) DropdownMenuItem(text = { Text("Masquer cette fic") }, leadingIcon = { Icon(Icons.Outlined.VisibilityOff, null) },
                         onClick = { menu = false; JunkFilter.hideFic(fic); Toast.show("Fic masquée (dossier « Masquées »)."); Nav.pop() })
+                    if (inLib != null) DropdownMenuItem(text = { Text("Rechercher dans cette fic") }, leadingIcon = { Icon(Icons.Outlined.FindInPage, null) }, onClick = { menu = false; Nav.push(Screen.ChapterSearch(fic.id)) })
                     DropdownMenuItem(text = { Text("Partager le lien") }, leadingIcon = { Icon(Icons.Outlined.Share, null) }, onClick = {
                         menu = false
                         context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, fic.url), "Partager"))

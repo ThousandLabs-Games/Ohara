@@ -146,6 +146,7 @@ object Library {
                 maxChapterRead = maxOf(it.maxChapterRead, drop.maxChapterRead.coerceAtMost(keep.totalChapters - 1))
             )
         }
+        ReadingLog.renameFic(dropId, keepId)
         remove(dropId)
     }
 
@@ -212,11 +213,22 @@ object Library {
 object ReadingLog {
     private lateinit var file: File
     private val days = linkedMapOf<String, LongArray>() // "2026-11-17" → [mots, secondes, chapitres]
+    /** Lecture de chaque fic jour par jour : "2026-11-17" → (identifiant de la fic → [mots, secondes]), pour le bilan du mois. */
+    private val ficDays = HashMap<String, HashMap<String, LongArray>>()
     private var dirty = 0
     private var lastSave = 0L
 
     private fun parse(o: JSONObject) {
+        o.optJSONObject("_fics")?.let { f ->
+            for (d in f.keys()) {
+                val m = HashMap<String, LongArray>()
+                val fo = f.optJSONObject(d) ?: continue
+                for (id in fo.keys()) fo.optJSONArray(id)?.let { a -> m[id] = longArrayOf(a.optLong(0), a.optLong(1)) }
+                ficDays[d] = m
+            }
+        }
         for (k in o.keys()) {
+            if (k.startsWith("_")) continue
             val a = o.optJSONArray(k) ?: continue
             days[k] = longArrayOf(a.optLong(0).coerceAtLeast(0), a.optLong(1).coerceAtLeast(0), a.optLong(2).coerceAtLeast(0))
         }
@@ -231,10 +243,15 @@ object ReadingLog {
         "%04d-%02d-%02d".format(java.util.Locale.ROOT, c.get(Calendar.YEAR), c.get(Calendar.MONTH) + 1, c.get(Calendar.DAY_OF_MONTH))
 
     @Synchronized
-    fun add(words: Long, seconds: Long, chapters: Long = 0) {
+    fun add(words: Long, seconds: Long, chapters: Long = 0, ficId: String? = null) {
         if (words <= 0 && seconds <= 0 && chapters <= 0) return
-        val cur = days.getOrPut(dayKey(Calendar.getInstance())) { longArrayOf(0, 0, 0) }
+        val key = dayKey(Calendar.getInstance())
+        val cur = days.getOrPut(key) { longArrayOf(0, 0, 0) }
         cur[0] += words.coerceAtLeast(0); cur[1] += seconds.coerceAtLeast(0); cur[2] += chapters.coerceAtLeast(0)
+        if (ficId != null) {
+            val f = ficDays.getOrPut(key) { HashMap() }.getOrPut(ficId) { longArrayOf(0, 0) }
+            f[0] += words.coerceAtLeast(0); f[1] += seconds.coerceAtLeast(0)
+        }
         // le temps arrive toutes les quelques secondes : on n'écrit le fichier qu'une fois par minute (ou à chaque chapitre)
         dirty++
         val now = System.currentTimeMillis()
@@ -248,19 +265,38 @@ object ReadingLog {
     @Synchronized
     fun snapshot(): Map<String, LongArray> = days.mapValues { it.value.clone() }
 
+    /** Lecture par fic sur les jours dont la clé commence par [prefix] (« 2026-11 » pour novembre) : identifiant → [mots, secondes]. */
+    @Synchronized
+    fun ficsFor(prefix: String): Map<String, LongArray> {
+        val out = HashMap<String, LongArray>()
+        ficDays.filterKeys { it.startsWith(prefix) }.values.forEach { m -> m.forEach { (id, a) -> val o = out.getOrPut(id) { longArrayOf(0, 0) }; o[0] += a[0]; o[1] += a[1] } }
+        return out
+    }
+
+    /** Une fic change d'identifiant (doublons fusionnés) : sa lecture la suit. */
+    @Synchronized
+    fun renameFic(from: String, to: String) {
+        ficDays.values.forEach { m -> m.remove(from)?.let { a -> val o = m.getOrPut(to) { longArrayOf(0, 0) }; o[0] += a[0]; o[1] += a[1] } }
+    }
+
     @Synchronized
     fun replace(o: JSONObject) {
-        days.clear()
+        days.clear(); ficDays.clear()
         parse(o)
         save()
     }
 
     /** Remise à zéro du journal (les compteurs de chaque fic restent). */
     @Synchronized
-    fun clear() { days.clear(); save() }
+    fun clear() { days.clear(); ficDays.clear(); save() }
 
     @Synchronized
-    fun toJson(): JSONObject = JSONObject().also { o -> days.forEach { (k, v) -> o.put(k, JSONArray().put(v[0]).put(v[1]).put(v[2])) } }
+    fun toJson(): JSONObject = JSONObject().also { o ->
+        days.forEach { (k, v) -> o.put(k, JSONArray().put(v[0]).put(v[1]).put(v[2])) }
+        if (ficDays.isNotEmpty()) o.put("_fics", JSONObject().also { f ->
+            ficDays.forEach { (d, m) -> f.put(d, JSONObject().also { fo -> m.forEach { (id, a) -> fo.put(id, JSONArray().put(a[0]).put(a[1])) } }) }
+        })
+    }
 
     private fun save() { dirty = 0; lastSave = System.currentTimeMillis(); SafeFile.write(file, toJson().toString()) }
 }

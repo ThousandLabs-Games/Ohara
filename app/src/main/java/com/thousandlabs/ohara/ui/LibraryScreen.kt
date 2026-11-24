@@ -215,6 +215,7 @@ fun LibraryTab() {
                                 IconButton(onClick = { menu = true }) { Icon(Icons.Outlined.MoreVert, "Plus") }
                                 DropdownMenu(menu, onDismissRequest = { menu = false }) {
                                     DropdownMenuItem(text = { Text("File de téléchargement") }, leadingIcon = { Icon(Icons.Outlined.Download, null) }, onClick = { menu = false; Nav.push(Screen.Downloads) })
+                                    DropdownMenuItem(text = { Text("Rechercher dans les chapitres") }, leadingIcon = { Icon(Icons.Outlined.FindInPage, null) }, onClick = { menu = false; Nav.push(Screen.ChapterSearch()) })
                                     DropdownMenuItem(text = { Text("Statistiques de lecture") }, leadingIcon = { Icon(Icons.Outlined.BarChart, null) }, onClick = { menu = false; Nav.push(Screen.Stats) })
                                     DropdownMenuItem(text = { Text("Doublons") }, leadingIcon = { Icon(Icons.Outlined.MergeType, null) }, onClick = { menu = false; Nav.push(Screen.Duplicates) })
                                     DropdownMenuItem(text = { Text("Nouvelle étagère") }, leadingIcon = { Icon(Icons.Outlined.Bookmarks, null) }, onClick = { menu = false; newShelf = true })

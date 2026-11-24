@@ -99,6 +99,8 @@ fun OharaRoot() {
                         Screen.Add -> AddScreen()
                         Screen.Downloads -> DownloadsScreen()
                         Screen.Stats -> StatsScreen()
+                        is Screen.ChapterSearch -> ChapterSearchScreen(s.ficId)
+                        Screen.MonthReport -> MonthReportScreen()
                         Screen.Guide -> GuideScreen()
                         Screen.WhatsNew -> WhatsNewScreen()
                         Screen.Hidden -> HiddenScreen()
@@ -110,6 +112,7 @@ fun OharaRoot() {
                 }
                 }
                 Recap.pending?.let { id -> RecapSheet(id) { Recap.pending = null } }
+                NightOverlay()
                 SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = 80.dp))
                 if (Locker.locked) LockScreen()
             }

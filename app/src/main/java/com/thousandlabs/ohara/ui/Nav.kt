@@ -26,6 +26,9 @@ sealed class Screen {
     data object Add : Screen()
     data object Downloads : Screen()
     data object Stats : Screen()
+    /** Recherche dans le texte des chapitres gardés (d'une fic, ou de toutes). */
+    data class ChapterSearch(val ficId: String? = null) : Screen()
+    data object MonthReport : Screen()
     data object Guide : Screen()
     data object WhatsNew : Screen()
     data object Hidden : Screen()

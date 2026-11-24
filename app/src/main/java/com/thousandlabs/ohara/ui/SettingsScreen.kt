@@ -214,6 +214,7 @@ private fun ReadingSection() {
     SectionTitle("Pendant la lecture")
     SwitchRow("Cacher les barres en lisant", "Les barres du haut et du bas disparaissent quand vous descendez dans une page, et reviennent quand vous remontez", BrowserHolder.autoHideBars) { BrowserHolder.autoHideBars = it }
     SwitchRow("Glisser pour changer de chapitre", "Tout en bas d'un chapitre, continuez à faire défiler vers le bas en gardant le doigt une seconde : chapitre suivant. Tout en haut, continuez vers le haut : chapitre précédent", PageTools.pullNav) { PageTools.pullNav = it }
+    NightFilterSettings()
     SectionTitle("Mode lecture")
     SwitchRow("Toujours ouvrir les chapitres en mode lecture", "Seulement le texte, avec votre police, votre taille et votre thème. Réglez l'affichage depuis le menu du navigateur, en mode lecture", PageTools.autoReader) { PageTools.autoReader = it }
     SectionTitle("Autres fonctions des pages")
@@ -699,4 +700,30 @@ private fun NamesSection() {
             confirmButton = { TextButton(onClick = { showList = null }) { Text("Fermer") } }
         )
     }
+}
+
+/** Réglages du filtre de nuit (Réglages › Lecture). */
+@Composable
+private fun NightFilterSettings() {
+    val pv by Prefs.version.collectAsState()
+    @Suppress("UNUSED_EXPRESSION") pv
+    SectionTitle("Filtre de nuit")
+    Text("Une teinte chaude et une légère pénombre sur tout l'écran d'Ohara, pour lire le soir sans vous fatiguer les yeux. Menu du navigateur › « Filtre de nuit » pour l'allumer ou l'éteindre d'un geste.",
+        Modifier.padding(horizontal = 16.dp), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    Row(Modifier.padding(horizontal = 16.dp, vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        listOf(NightFilter.OFF to "Coupé", NightFilter.EVENING to "Le soir", NightFilter.ALWAYS to "Toujours").forEach { (m, label) ->
+            FilterChip(NightFilter.mode == m, { NightFilter.mode = m }, { Text(label) })
+        }
+    }
+    if (NightFilter.mode == NightFilter.EVENING) {
+        Text("De ${NightFilter.fromHour} h à ${NightFilter.toHour} h", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(horizontal = 16.dp))
+        Text("Début", style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(start = 16.dp, top = 4.dp))
+        Slider(NightFilter.fromHour.toFloat(), { NightFilter.fromHour = it.toInt() }, valueRange = 16f..23f, steps = 6, modifier = Modifier.padding(horizontal = 16.dp))
+        Text("Fin", style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(start = 16.dp))
+        Slider(NightFilter.toHour.toFloat(), { NightFilter.toHour = it.toInt() }, valueRange = 4f..10f, steps = 5, modifier = Modifier.padding(horizontal = 16.dp))
+    }
+    Text("Chaleur de la teinte : ${(NightFilter.warmth * 100).toInt()} %", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(start = 16.dp, top = 6.dp))
+    Slider(NightFilter.warmth, { NightFilter.warmth = it }, valueRange = 0f..1f, modifier = Modifier.padding(horizontal = 16.dp))
+    Text("Pénombre : ${(NightFilter.dim * 100).toInt()} %", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(start = 16.dp))
+    Slider(NightFilter.dim, { NightFilter.dim = it }, valueRange = 0f..1f, modifier = Modifier.padding(horizontal = 16.dp))
 }

@@ -13,6 +13,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material3.AlertDialog
@@ -175,6 +176,8 @@ fun StatsScreen() {
                 StatBox("Jours d'affilée", "$streak", Modifier.weight(1f))
                 StatBox("Record d'affilée", "$best", Modifier.weight(1f))
             }
+
+            SettingRow("Bilan du mois", "Temps, mots, fic et fandoms du mois, comparés au mois précédent", Icons.Outlined.CalendarMonth, onClick = { Nav.push(Screen.MonthReport) })
 
             SectionTitle("Évolution")
             Row(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
