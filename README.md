@@ -39,6 +39,11 @@ Ohara réunit au même endroit la recherche, la lecture, le téléchargement et 
 - Temps de lecture juste (pauses de lecture comprises, arrêt après 2 min 30 sans geste ou appli en arrière-plan), mots du texte d'origine, chapitres lus, chaque chapitre compté une seule fois, WebNovel et mode Reader de SpaceBattles compris.
 - Graphique 7 jours, 30 jours ou 12 mois (temps, mots, chapitres), résumé du jour, de la semaine et du mois, jours d'affilée et record, meilleur jour, fandoms et fics les plus lus, temps restant estimé sur la fiche de chaque fic.
 
+### Lecture le soir et recherche
+- Rechercher dans les chapitres gardés sur le téléphone (toutes les fics ou une seule), sans connexion, sans tenir compte des majuscules ni des accents ; le chapitre s'ouvre avec le passage surligné.
+- Filtre de nuit : teinte chaude et pénombre réglables, toujours ou seulement le soir, interrupteur dans le menu du navigateur.
+- Bilan du mois : temps comparé au mois précédent, mots, chapitres, jours de lecture, meilleur jour, fic et fandoms du mois.
+
 ### Découverte
 - Recherche avancée multi-sites, score « Prometteuse » aux critères réglables, « Pour vous », « Nouveautés », « Trouver une fic similaire ».
 - Filtre anti-déchets toujours actif (harem, fics « react », fics chinoises récentes, System et transmigration de mauvaise qualité), dossier « Masquées ».

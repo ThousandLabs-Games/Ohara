@@ -233,7 +233,7 @@ object HiddenLog {
                     entries.values.forEach { e -> a.put(JSONObject().put("f", e.fic.toJson()).put("r", e.reason.name).put("d", e.detail).put("a", e.at)) }
                 }.toString()
             }
-            runCatching { file.writeText(json) }
+            com.thousandlabs.ohara.data.SafeFile.write(file, json)
         }.start()
     }
 }

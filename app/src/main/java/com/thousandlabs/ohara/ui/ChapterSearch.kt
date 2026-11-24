@@ -66,6 +66,7 @@ object ChapterSearch {
     fun fold(s: String): String {
         val b = StringBuilder(s.length)
         for (c in s) {
+            if (c.code < 128) { b.append(c.lowercaseChar()); continue }
             val f = when (c) {
                 '’', '‘', 'ʼ', '`' -> '\''
                 '“', '”', '«', '»' -> '"'

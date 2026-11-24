@@ -136,7 +136,7 @@ object Downloads {
             var done = 0
             for (i in wanted) {
                 if (_jobs.value.firstOrNull { it.ficId == id }?.state != DownloadJob.State.RUNNING) return
-                val html = src.fetchChapter(fic, i)
+                val html = fetchWithRetry(src, fic, i)
                 Library.writeChapter(id, i, html)
                 done++
                 edit(id) { it.copy(done = done, message = fic.chapters[i].title) }
@@ -164,6 +164,19 @@ object Downloads {
         } catch (e: Exception) {
             edit(id) { it.copy(state = DownloadJob.State.ERROR, message = e.message ?: "Erreur inconnue") }
         }
+    }
+
+    /** Une coupure de réseau passagère ne fait plus échouer toute la fic : deux nouveaux essais, après une pause. */
+    private suspend fun fetchWithRetry(src: com.thousandlabs.ohara.sources.Source, fic: Fic, i: Int): String {
+        repeat(2) { attempt ->
+            try { return src.fetchChapter(fic, i) }
+            catch (e: java.io.IOException) {
+                if (e is SiteError || e is VerificationNeeded) throw e
+                edit(fic.id) { it.copy(message = "Réseau instable, nouvel essai (${attempt + 1}/2)…") }
+                kotlinx.coroutines.delay(4000L * (attempt + 1))
+            }
+        }
+        return src.fetchChapter(fic, i)
     }
 
     /**

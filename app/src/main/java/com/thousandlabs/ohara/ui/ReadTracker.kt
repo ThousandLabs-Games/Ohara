@@ -149,6 +149,22 @@ setTimeout(tick,1200);setInterval(tick,5000);
     private fun chapterIndex(info: LinkInfo, fic: Fic?): Int? =
         info.chapterIndex ?: info.chapterKey?.let { k -> fic?.chapters?.indexOfFirst { it.key == k }?.takeIf { it >= 0 } }
 
+    /** Temps de lecture des fics de la bibliothèque, mis de côté puis ajouté à leur fiche toutes les 30 secondes. */
+    private val pendingSecs = HashMap<String, Long>()
+
+    @Synchronized
+    private fun addFicSeconds(id: String, secs: Long) {
+        val v = (pendingSecs[id] ?: 0L) + secs
+        if (v >= 30) { pendingSecs.remove(id); Library.update(id) { it.copy(secondsRead = it.secondsRead + v) } } else pendingSecs[id] = v
+    }
+
+    /** Ajoute aux fiches le temps encore en attente (Ohara passe en arrière-plan). */
+    @Synchronized
+    fun flushSeconds() {
+        pendingSecs.forEach { (id, v) -> Library.update(id) { it.copy(secondsRead = it.secondsRead + v) } }
+        pendingSecs.clear()
+    }
+
     /** Lien de la page, complété par le chapitre affiché quand la page en enchaîne plusieurs. */
     private fun resolveUnit(url: String, unitKey: String): LinkInfo? {
         val info = Sources.resolve(url)?.second ?: return null
@@ -214,7 +230,7 @@ setTimeout(tick,1200);setInterval(tick,5000);
         val secs = readingSeconds(moved, active)
         if (secs > 0) {
             ReadingLog.add(0, secs, ficId = id)
-            if (lib != null) Library.update(id) { it.copy(secondsRead = it.secondsRead + secs) }
+            if (lib != null) addFicSeconds(id, secs)
             else synchronized(watches) { watches[id]?.let { it.seconds += secs } }
         }
         if (lib != null) {
@@ -225,9 +241,15 @@ setTimeout(tick,1200);setInterval(tick,5000);
                 ReadingLog.add(words.toLong(), 0, chapters = 1, ficId = id)
                 Library.update(id) { it.copy(wordsRead = it.wordsRead + words) }
             }
-            if (now - (lastSaveAt[id] ?: 0L) < 3000 && fraction < 0.6f) return
-            lastSaveAt[id] = now
             val idx = chapterIndex(info, lib)
+            // La fiche n'est réécrite que si quelque chose change (page, chapitre, progression, étagère),
+            // ou une fois par minute pour l'heure de lecture : pas d'écriture de toute la bibliothèque toutes les 5 secondes.
+            val changed = lib.resumeUrl != url || (idx != null && idx != lib.progressChapter) ||
+                (idx != null && fraction >= 0.9f && idx > lib.maxChapterRead) ||
+                (idx != null && idx >= lib.totalChapters - 1 && lib.newChapters != 0) ||
+                (Shelves.TO_READ in lib.shelves && fraction > 0.3f)
+            if (!changed && now - (lastSaveAt[id] ?: 0L) < 60_000) return
+            lastSaveAt[id] = now
             Library.update(id) { f ->
                 f.copy(
                     resumeUrl = url, lastOpened = now,

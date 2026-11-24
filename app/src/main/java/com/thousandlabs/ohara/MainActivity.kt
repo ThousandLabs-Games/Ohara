@@ -92,6 +92,7 @@ class MainActivity : FragmentActivity() {
     override fun onStop() {
         super.onStop()
         com.thousandlabs.ohara.ui.ReadTracker.foreground = false
+        com.thousandlabs.ohara.ui.ReadTracker.flushSeconds()
         com.thousandlabs.ohara.data.ReadingLog.flush()
         Locker.onStop()
         com.thousandlabs.ohara.ui.ClaudePrep.onHidden()
