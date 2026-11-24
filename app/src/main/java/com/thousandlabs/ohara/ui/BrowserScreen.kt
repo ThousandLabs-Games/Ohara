@@ -49,6 +49,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.ArrowForward
 import androidx.compose.material.icons.automirrored.outlined.HelpOutline
+import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowLeft
+import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.automirrored.outlined.Send
 import androidx.compose.material.icons.outlined.*
@@ -1095,19 +1097,48 @@ private fun FindBar(t: Tab) {
 }
 
 @Composable
-fun MenuTile(icon: ImageVector, label: String, active: Boolean = false, enabled: Boolean = true, onClick: () -> Unit) {
+fun MenuTile(icon: ImageVector, label: String, active: Boolean = false, enabled: Boolean = true, selected: Boolean = false, faded: Boolean = false, onClick: () -> Unit) {
     val cs = MaterialTheme.colorScheme
     Column(
-        Modifier.width(82.dp).clip(RoundedCornerShape(14.dp)).clickable(enabled = enabled, onClick = onClick).padding(vertical = 10.dp),
+        Modifier.width(82.dp).clip(RoundedCornerShape(14.dp))
+            .then(if (selected) Modifier.border(2.dp, cs.primary, RoundedCornerShape(14.dp)) else Modifier)
+            .clickable(enabled = enabled, onClick = onClick).padding(vertical = 10.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Box(Modifier.size(46.dp).clip(CircleShape).background(if (active) cs.primary else cs.surfaceContainerHighest), contentAlignment = Alignment.Center) {
-            Icon(icon, null, tint = if (!enabled) cs.outline else if (active) cs.onPrimary else cs.onSurface)
+            Icon(icon, null, tint = if (!enabled || faded) cs.outline else if (active) cs.onPrimary else cs.onSurface)
         }
         Spacer(Modifier.height(6.dp))
         Text(label, style = MaterialTheme.typography.labelSmall, textAlign = TextAlign.Center, maxLines = 2,
-            color = if (enabled) cs.onSurface else cs.outline)
+            color = if (enabled && !faded) cs.onSurface else cs.outline)
     }
+}
+
+/** Un bouton du menu du navigateur. [shown] : affiché sur cette page (certains boutons ne servent que sur une page de fic). */
+private class MenuItem(
+    val id: String, val icon: ImageVector, val label: String, val active: Boolean = false, val enabled: Boolean = true,
+    val shown: Boolean = true, val onClick: () -> Unit
+)
+
+/** Ordre et boutons masqués du menu du navigateur, choisis par vous (menu › crayon). */
+object MenuLayout {
+    fun order(defaults: List<String>): List<String> {
+        val saved = Prefs.getList("menu_order").filter { it in defaults }
+        if (saved.isEmpty()) return defaults
+        // un bouton ajouté par une nouvelle version se place après son voisin d'origine
+        val out = saved.toMutableList()
+        defaults.forEachIndexed { i, id ->
+            if (id !in out) {
+                val prev = defaults.subList(0, i).lastOrNull { it in out }
+                out.add(if (prev == null) 0 else out.indexOf(prev) + 1, id)
+            }
+        }
+        return out
+    }
+    fun save(order: List<String>) = Prefs.putList("menu_order", order)
+    val hidden: Set<String> get() = Prefs.getList("menu_hidden").toSet()
+    fun setHidden(id: String, hide: Boolean) = Prefs.putList("menu_hidden", (if (hide) hidden + id else hidden - id).toList())
+    fun reset() { Prefs.remove("menu_order"); Prefs.remove("menu_hidden") }
 }
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
@@ -1117,70 +1148,127 @@ private fun BrowserMenu(t: Tab, context: Context, onBookmark: () -> Unit, onRead
     val info = h.ficInfo(t.url)
     val inLib = info != null && Library.contains(info.ficId)
     val host = runCatching { java.net.URI(t.url).host }.getOrNull().orEmpty()
+    val pv by Prefs.version.collectAsState()
+    @Suppress("UNUSED_EXPRESSION") pv
+    var editing by remember { mutableStateOf(false) }
+    var sel by remember { mutableStateOf<String?>(null) }
+    val fav = !t.isStart && com.thousandlabs.ohara.data.Bookmarks.contains(t.url)
+    val adOn = !t.isStart && AdBlocker.enabledOn(t.url)
+    val items = listOf(
+        MenuItem("new", Icons.Outlined.Add, "Nouvel onglet") { onClose(); h.newTab() },
+        MenuItem("private", Icons.Outlined.VisibilityOff, "Onglet privé") { onClose(); h.newTab(private = true) },
+        MenuItem("library", Icons.Outlined.LocalLibrary, "Bibliothèque") { onClose(); Nav.push(Screen.Library) },
+        MenuItem("discover", Icons.Outlined.Explore, "Découvrir") { onClose(); Nav.push(Screen.Discover) },
+        MenuItem("downloads", Icons.Outlined.Download, "Téléchargements") { onClose(); Nav.push(Screen.Downloads) },
+        MenuItem("fic", Icons.Outlined.LibraryAdd, if (inLib) "Voir la fiche" else "Ajouter à la bibliothèque", active = inLib, shown = info != null) {
+            onClose(); if (info != null) { if (inLib) Nav.push(Screen.FicDetail(info.ficId)) else h.addCurrent(false) }
+        },
+        MenuItem("dlfic", Icons.Outlined.Download, "Télécharger la fic", shown = info != null) { onClose(); h.addCurrent(true) },
+        MenuItem("claude", Icons.AutoMirrored.Outlined.Send, "Envoyer à Claude", shown = info != null) {
+            onClose()
+            if (info != null && inLib) onClaude(info.ficId) else Toast.show("Ajoutez d'abord la fic à la bibliothèque (même menu), puis envoyez-la à Claude.")
+        },
+        MenuItem("recap", Icons.Outlined.History, "Précédemment",
+            shown = info != null && inLib && Library.get(info.ficId)?.let { Recap.available(it) } == true) { onClose(); info?.let { Recap.pending = it.ficId } },
+        MenuItem("addfav", Icons.Outlined.StarOutline, if (fav) "Dans les favoris" else "Ajouter aux favoris", active = fav, enabled = !t.isStart) { onClose(); onBookmark() },
+        MenuItem("favs", Icons.Outlined.Bookmarks, "Favoris") { onClose(); Nav.push(Screen.BookmarksScreen) },
+        MenuItem("reader", Icons.AutoMirrored.Outlined.MenuBook, if (t.readerMode) "Quitter le mode lecture" else "Mode lecture", active = t.readerMode, enabled = !t.isStart) {
+            onClose(); h.toggleReader(t)
+        },
+        MenuItem("readerstyle", Icons.Outlined.TextFields, "Affichage de lecture", shown = t.readerMode) { onClose(); onReaderStyle() },
+        MenuItem("history", Icons.Outlined.History, "Historique") { onClose(); Nav.push(Screen.HistoryScreen) },
+        MenuItem("translate", Icons.Outlined.Translate, "Traduire", active = Translate.enabled, enabled = !t.isStart) {
+            onClose(); Translate.enabled = !Translate.enabled
+            t.web?.let { if (Translate.enabled) PageTranslator.inject(it) else PageTranslator.restore(it) }
+        },
+        MenuItem("desktop", Icons.Outlined.DesktopWindows, "Version ordinateur", active = t.desktop, enabled = !t.isStart) { onClose(); h.setDesktop(t, !t.desktop) },
+        MenuItem("find", Icons.Outlined.FindInPage, "Rechercher dans la page", enabled = !t.isStart) { onClose(); h.findOpen = true },
+        MenuItem("search", Icons.Outlined.Search, "Rechercher dans mes fics") { onClose(); Nav.push(Screen.ChapterSearch(info?.ficId?.takeIf { Library.contains(it) })) },
+        MenuItem("night", Icons.Outlined.NightsStay, "Filtre de nuit", active = NightFilter.activeNow()) { onClose(); NightFilter.toggle() },
+        MenuItem("pick", Icons.Outlined.TouchApp, "Masquer un élément", enabled = !t.isStart) { onClose(); h.startPicker() },
+        MenuItem("masked", Icons.Outlined.Visibility, "Passages masqués", enabled = !t.isStart) { onClose(); onMasked() },
+        MenuItem("site", Icons.Outlined.Tune, "Réglages de ce site", enabled = !t.isStart && !t.offline) { onClose(); onSite() },
+        MenuItem("adblock", Icons.Outlined.Shield, if (adOn) "Bloqueur actif" else "Bloqueur coupé ici", active = adOn, enabled = !t.isStart) {
+            onClose()
+            val base = host.removePrefix("www.").removePrefix("m.")
+            Prefs.adblockDisabledSites = if (adOn) Prefs.adblockDisabledSites + base else Prefs.adblockDisabledSites.filterNot { host == it || host.endsWith(".$it") }
+            t.web?.reload()
+        },
+        MenuItem("share", Icons.Outlined.Share, "Partager", enabled = !t.isStart) { onClose(); h.share(context) },
+        MenuItem("addsite", Icons.Outlined.AddLink, "Site de fics",
+            shown = Prefs.advancedBrowsing && Prefs.advancedUnlocked && !t.isStart && !Privacy.isSourceHost(host) && !GenericSource.matches(host)) {
+            onClose(); GenericSource.addDomain(host); Toast.show("$host ajouté comme site de fics.")
+        },
+        MenuItem("clear", Icons.Outlined.DeleteSweep, "Effacer les données") {
+            onClose(); Privacy.clearBrowsingData(context.applicationContext); h.tabs.forEach { it.web?.clearHistory() }
+            Toast.show("Cookies, cache et historique du navigateur effacés.")
+        },
+        MenuItem("settings", Icons.Outlined.Settings, "Réglages") { onClose(); Nav.push(Screen.SettingsMain) },
+        MenuItem("guide", Icons.AutoMirrored.Outlined.HelpOutline, "Comment faire") { onClose(); Nav.push(Screen.Guide) }
+    )
+    val byId = items.associateBy { it.id }
+    val order = MenuLayout.order(items.map { it.id })
+    val hidden = MenuLayout.hidden
+    // Hors modification : seulement les boutons utiles sur cette page et non masqués. En modification : tous, pour les ranger.
+    val visible = order.mapNotNull { byId[it] }.filter { editing || (it.shown && it.id !in hidden) }
+
     ModalBottomSheet(onDismissRequest = onClose) {
-        Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp).padding(bottom = 24.dp)) {
-            if (!t.isStart) {
-                Text(t.title.ifBlank { host }, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(horizontal = 8.dp))
-                Text(host, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = 8.dp))
-                Spacer(Modifier.height(8.dp))
+        // Le menu défile : plus aucun bouton ne disparaît sous le bas de l'écran, même sur une page de fic.
+        Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 12.dp).padding(bottom = 24.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f).padding(horizontal = 8.dp)) {
+                    if (editing) {
+                        Text("Ranger le menu", style = MaterialTheme.typography.titleSmall)
+                        Text("Touchez un bouton, puis déplacez-le avec les flèches", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    } else if (!t.isStart) {
+                        Text(t.title.ifBlank { host }, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(host, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+                if (editing) TextButton(onClick = { editing = false; sel = null }) { Text("Terminé") }
+                else IconButton(onClick = { editing = true }) { Icon(Icons.Outlined.Edit, "Ranger le menu") }
             }
-            FlowRow(horizontalArrangement = Arrangement.SpaceEvenly, modifier = Modifier.fillMaxWidth()) {
-                MenuTile(Icons.Outlined.Add, "Nouvel onglet") { onClose(); h.newTab() }
-                MenuTile(Icons.Outlined.VisibilityOff, "Onglet privé") { onClose(); h.newTab(private = true) }
-                MenuTile(Icons.Outlined.LocalLibrary, "Bibliothèque") { onClose(); Nav.push(Screen.Library) }
-                MenuTile(Icons.Outlined.Explore, "Découvrir") { onClose(); Nav.push(Screen.Discover) }
-                MenuTile(Icons.Outlined.Download, "Téléchargements") { onClose(); Nav.push(Screen.Downloads) }
-                if (info != null) {
-                    MenuTile(Icons.Outlined.LibraryAdd, if (inLib) "Voir la fiche" else "Ajouter à la bibliothèque", active = inLib) {
-                        onClose(); if (inLib) Nav.push(Screen.FicDetail(info.ficId)) else h.addCurrent(false)
+            Spacer(Modifier.height(8.dp))
+            BoxWithConstraints(Modifier.fillMaxWidth()) {
+                val cols = (maxWidth / 82.dp).toInt().coerceAtLeast(1)
+                Column {
+                    if (editing) {
+                        fun move(by: Int) {
+                            val id = sel ?: return
+                            val l = order.toMutableList()
+                            val i = l.indexOf(id)
+                            val j = (i + by).coerceIn(0, l.lastIndex)
+                            if (i < 0 || i == j) return
+                            l.removeAt(i); l.add(j, id)
+                            MenuLayout.save(l)
+                        }
+                        val s = sel
+                        Surface(color = MaterialTheme.colorScheme.surfaceContainerHigh, shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
+                            Row(Modifier.padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                                IconButton(onClick = { move(-cols) }, enabled = s != null) { Icon(Icons.Outlined.KeyboardArrowUp, "Monter") }
+                                IconButton(onClick = { move(-1) }, enabled = s != null) { Icon(Icons.AutoMirrored.Outlined.KeyboardArrowLeft, "À gauche") }
+                                IconButton(onClick = { move(1) }, enabled = s != null) { Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, "À droite") }
+                                IconButton(onClick = { move(cols) }, enabled = s != null) { Icon(Icons.Outlined.KeyboardArrowDown, "Descendre") }
+                                Spacer(Modifier.weight(1f))
+                                if (s != null) {
+                                    val isHidden = s in hidden
+                                    TextButton(onClick = { MenuLayout.setHidden(s, !isHidden) }) { Text(if (isHidden) "Afficher" else "Masquer") }
+                                } else TextButton(onClick = { MenuLayout.reset(); Toast.show("Menu remis dans l'ordre d'origine.") }) { Text("Ordre d'origine") }
+                            }
+                        }
                     }
-                    MenuTile(Icons.Outlined.Download, "Télécharger la fic") { onClose(); h.addCurrent(true) }
-                    MenuTile(Icons.AutoMirrored.Outlined.Send, "Envoyer à Claude") {
-                        onClose()
-                        if (inLib) onClaude(info.ficId) else Toast.show("Ajoutez d'abord la fic à la bibliothèque (même menu), puis envoyez-la à Claude.")
+                    FlowRow(horizontalArrangement = Arrangement.SpaceEvenly, modifier = Modifier.fillMaxWidth()) {
+                        visible.forEach { m ->
+                            if (editing) MenuTile(m.icon, m.label, active = m.active, selected = sel == m.id, faded = m.id in hidden || !m.shown) {
+                                sel = if (sel == m.id) null else m.id
+                            } else MenuTile(m.icon, m.label, m.active, m.enabled, onClick = m.onClick)
+                        }
                     }
-                    if (inLib && Library.get(info.ficId)?.let { Recap.available(it) } == true)
-                        MenuTile(Icons.Outlined.History, "Précédemment") { onClose(); Recap.pending = info.ficId }
+                    if (editing) Text(
+                        "Les boutons grisés sont masqués, ou ne servent que sur certaines pages (page de fic, mode lecture). « Réglages » reste aussi dans l'onglet du bas de l'accueil.",
+                        Modifier.padding(8.dp), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
-                val fav = !t.isStart && com.thousandlabs.ohara.data.Bookmarks.contains(t.url)
-                MenuTile(Icons.Outlined.StarOutline, if (fav) "Dans les favoris" else "Ajouter aux favoris", active = fav, enabled = !t.isStart) {
-                    onClose(); onBookmark()
-                }
-                MenuTile(Icons.Outlined.Bookmarks, "Favoris") { onClose(); Nav.push(Screen.BookmarksScreen) }
-                MenuTile(Icons.AutoMirrored.Outlined.MenuBook, if (t.readerMode) "Quitter le mode lecture" else "Mode lecture", active = t.readerMode, enabled = !t.isStart) {
-                    onClose(); h.toggleReader(t)
-                }
-                if (t.readerMode) MenuTile(Icons.Outlined.TextFields, "Affichage de lecture") { onClose(); onReaderStyle() }
-                MenuTile(Icons.Outlined.History, "Historique") { onClose(); Nav.push(Screen.HistoryScreen) }
-                MenuTile(Icons.Outlined.Translate, "Traduire", active = Translate.enabled, enabled = !t.isStart) {
-                    onClose(); Translate.enabled = !Translate.enabled
-                    t.web?.let { if (Translate.enabled) PageTranslator.inject(it) else PageTranslator.restore(it) }
-                }
-                MenuTile(Icons.Outlined.DesktopWindows, "Version ordinateur", active = t.desktop, enabled = !t.isStart) { onClose(); h.setDesktop(t, !t.desktop) }
-                MenuTile(Icons.Outlined.FindInPage, "Rechercher dans la page", enabled = !t.isStart) { onClose(); h.findOpen = true }
-                MenuTile(Icons.Outlined.Search, "Rechercher dans mes fics") { onClose(); Nav.push(Screen.ChapterSearch(info?.ficId?.takeIf { Library.contains(it) })) }
-                MenuTile(Icons.Outlined.NightsStay, "Filtre de nuit", active = NightFilter.activeNow()) { onClose(); NightFilter.toggle() }
-                MenuTile(Icons.Outlined.TouchApp, "Masquer un élément", enabled = !t.isStart) { onClose(); h.startPicker() }
-                MenuTile(Icons.Outlined.Visibility, "Passages masqués", enabled = !t.isStart) { onClose(); onMasked() }
-                MenuTile(Icons.Outlined.Tune, "Réglages de ce site", enabled = !t.isStart && !t.offline) { onClose(); onSite() }
-                val adOn = !t.isStart && AdBlocker.enabledOn(t.url)
-                MenuTile(Icons.Outlined.Shield, if (adOn) "Bloqueur actif" else "Bloqueur coupé ici", active = adOn, enabled = !t.isStart) {
-                    onClose()
-                    val base = host.removePrefix("www.").removePrefix("m.")
-                    Prefs.adblockDisabledSites = if (adOn) Prefs.adblockDisabledSites + base else Prefs.adblockDisabledSites.filterNot { host == it || host.endsWith(".$it") }
-                    t.web?.reload()
-                }
-                MenuTile(Icons.Outlined.Share, "Partager", enabled = !t.isStart) { onClose(); h.share(context) }
-                if (Prefs.advancedBrowsing && Prefs.advancedUnlocked && !t.isStart && !Privacy.isSourceHost(host) && !GenericSource.matches(host)) {
-                    MenuTile(Icons.Outlined.AddLink, "Site de fics") { onClose(); GenericSource.addDomain(host); Toast.show("$host ajouté comme site de fics.") }
-                }
-                MenuTile(Icons.Outlined.DeleteSweep, "Effacer les données") {
-                    onClose(); Privacy.clearBrowsingData(context.applicationContext); h.tabs.forEach { it.web?.clearHistory() }
-                    Toast.show("Cookies, cache et historique du navigateur effacés.")
-                }
-                MenuTile(Icons.Outlined.Settings, "Réglages") { onClose(); Nav.push(Screen.SettingsMain) }
-                MenuTile(Icons.AutoMirrored.Outlined.HelpOutline, "Comment faire") { onClose(); Nav.push(Screen.Guide) }
             }
         }
     }

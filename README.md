@@ -26,6 +26,7 @@ Ohara réunit au même endroit la recherche, la lecture, le téléchargement et 
 - « Masquer un élément » d'un site (bannières, encarts), comme sur Brave.
 - Réglages par site : chaque fonction (glissement entre chapitres, barres cachées, mode lecture, masquage, menu des liens, traduction) peut être coupée sur un site seulement.
 - Historique activable, navigation libre cachée dans les réglages.
+- Menu du navigateur qui défile et se range à votre goût : boutons déplacés en haut, en bas, à gauche ou à droite, ou masqués.
 
 ### La bibliothèque à côté
 - Remplie toute seule : une fic y entre après 10 000 mots lus (réglable), et se rouvre à la dernière page lue, avec « Précédemment » (phrases clés des derniers chapitres lus) après une semaine sans l'ouvrir.
