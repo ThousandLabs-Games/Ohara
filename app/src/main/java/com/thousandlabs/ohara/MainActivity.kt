@@ -2,6 +2,7 @@ package com.thousandlabs.ohara
 
 import android.Manifest
 import android.content.Intent
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.view.KeyEvent
@@ -26,7 +27,9 @@ import com.thousandlabs.ohara.ui.OharaRoot
 import com.thousandlabs.ohara.ui.Screen
 import com.thousandlabs.ohara.ui.Toast
 import com.thousandlabs.ohara.update.AppUpdater
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class MainActivity : FragmentActivity() {
 
@@ -66,6 +69,15 @@ class MainActivity : FragmentActivity() {
             // « Prêt à envoyer à Claude » : l'envoi part au retour à l'écran (onStart)
             "claude" -> return
         }
+        // fichier .ohara touché ou partagé vers Ohara : fusion directe, sans passer par les Réglages
+        val fichier: Uri? = when (intent.action) {
+            Intent.ACTION_VIEW -> intent.data?.takeIf { it.scheme == "content" || it.scheme == "file" }
+            Intent.ACTION_SEND ->
+                if (Build.VERSION.SDK_INT >= 33) intent.getParcelableExtra(Intent.EXTRA_STREAM, Uri::class.java)
+                else @Suppress("DEPRECATION") intent.getParcelableExtra(Intent.EXTRA_STREAM)
+            else -> null
+        }
+        if (fichier != null) { importerFichier(fichier); return }
         val text = when (intent.action) {
             Intent.ACTION_SEND -> intent.getStringExtra(Intent.EXTRA_TEXT)
             Intent.ACTION_VIEW -> intent.dataString
@@ -79,6 +91,22 @@ class MainActivity : FragmentActivity() {
             return
         }
         com.thousandlabs.ohara.ui.LinkFlow.open(text)
+    }
+
+    /** Fusionne un fichier Ohara reçu (jamais « Remplacer ») : les nouveaux chapitres s'ajoutent à la suite. */
+    private fun importerFichier(uri: Uri) {
+        Toast.show("Importation du fichier Ohara…")
+        AppScope.launch {
+            runCatching {
+                withContext(Dispatchers.IO) {
+                    contentResolver.openInputStream(uri)?.use { com.thousandlabs.ohara.backup.Backup.restore(it, false) }
+                        ?: error("Fichier inaccessible")
+                }
+            }.onSuccess {
+                Nav.home(Nav.TAB_LIBRARY)
+                Toast.show("Fichier fusionné : votre bibliothèque est à jour.")
+            }.onFailure { Toast.show("Importation impossible : ${it.message}") }
+        }
     }
 
     override fun onStart() {

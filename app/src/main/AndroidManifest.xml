@@ -56,6 +56,36 @@
                 <data android:host="www.webnovel.com" />
                 <data android:host="m.webnovel.com" />
             </intent-filter>
+
+            <!-- Fichier .ohara touché ou partagé vers Ohara : il s'ouvre et se fusionne tout seul -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="content" />
+                <data android:scheme="file" />
+                <data android:mimeType="application/octet-stream" />
+                <data android:mimeType="application/x-ohara" />
+                <data android:mimeType="application/zip" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="content" />
+                <data android:scheme="file" />
+                <data android:host="*" />
+                <data android:mimeType="*/*" />
+                <data android:pathPattern=".*\\.ohara" />
+                <data android:pathPattern=".*\\..*\\.ohara" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="application/octet-stream" />
+                <data android:mimeType="application/x-ohara" />
+                <data android:mimeType="application/zip" />
+            </intent-filter>
         </activity>
 
         <!-- Quatre icônes qui changent selon le moment de la journée : une seule est active à la fois -->
